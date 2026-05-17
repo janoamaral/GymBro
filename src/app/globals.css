@@ -31,6 +31,7 @@ label,
   font-family: var(--font-heading), sans-serif;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  font-style: italic;
 }
 
 .panel {

@@ -9,8 +9,8 @@ import { NextWorkout } from '@/components/next-workout';
 import { NewCycleModal } from '@/components/new-cycle-modal';
 
 interface MainDashboardProps {
-  userName: string;
-  userPicture: string | null;
+  readonly userName: string;
+  readonly userPicture: string | null;
 }
 
 export default function MainDashboard({
@@ -63,24 +63,33 @@ export default function MainDashboard({
     setShowNewCycleModal(false);
   };
 
+  const userInitial = userName.trim().charAt(0).toUpperCase();
+
   return (
     <main className="min-h-full bg-gray-900 px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs tracking-[0.3em] text-gray-400">GymBro</p>
-            <h1 className="mt-2 text-4xl font-bold text-white">
-              Welcome, {userName}
-            </h1>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-full border border-white/20 bg-gray-800 p-1 shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
+              {userPicture ? (
+                <img
+                  src={userPicture}
+                  alt={userName}
+                  className="h-full w-full rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center rounded-full bg-gray-700 text-lg font-semibold text-gray-100">
+                  {userInitial}
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="text-sm text-gray-300">Hello there!</p>
+              <h1 className="mt-1 text-xl font-bold text-white">{userName}</h1>
+            </div>
           </div>
-          {userPicture && (
-            <img
-              src={userPicture}
-              alt={userName}
-              className="h-12 w-12 rounded-full"
-            />
-          )}
+          <p className="pt-1 text-xs tracking-[0.3em] text-gray-400">GymBro</p>
         </div>
       </div>
 
