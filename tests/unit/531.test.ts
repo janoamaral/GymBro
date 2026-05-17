@@ -11,9 +11,9 @@ import {
   tmForCycle,
 } from "@/lib/training/531";
 
-test("calculateTm floors using unit granularity", () => {
-  assert.equal(calculateTm(150, "kg"), 135);
-  assert.equal(calculateTm(315, "lb"), 280);
+test("calculateTm rounds 1RM using unit granularity", () => {
+  assert.equal(calculateTm(150, "kg"), 150);
+  assert.equal(calculateTm(315, "lb"), 315);
 });
 
 test("tmForCycle applies per-lift increment each cycle", () => {
@@ -21,9 +21,9 @@ test("tmForCycle applies per-lift increment each cycle", () => {
   const cycle2 = tmForCycle(150, "SQ", "kg", 2);
   const cycle3 = tmForCycle(150, "BP", "kg", 3);
 
-  assert.equal(cycle1, 135);
-  assert.equal(cycle2, 140);
-  assert.equal(cycle3, 140);
+  assert.equal(cycle1, 150);
+  assert.equal(cycle2, 155);
+  assert.equal(cycle3, 155);
 });
 
 test("plan531Week builds week 1 with AMRAP on set 3", () => {
@@ -35,7 +35,7 @@ test("plan531Week builds week 1 with AMRAP on set 3", () => {
     cycleNumber: 1,
   });
 
-  assert.equal(plan.tm, 142.5);
+  assert.equal(plan.tm, 160);
   assert.equal(plan.sets.length, 3);
   assert.equal(plan.sets[2].isAmrap, true);
 });

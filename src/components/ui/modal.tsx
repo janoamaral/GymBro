@@ -14,8 +14,9 @@ export function Modal({ isOpen, onClose, children, title }: ModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="relative w-full max-w-md rounded-lg bg-gray-900 p-6 shadow-xl">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+      <div className="flex min-h-full items-start justify-center py-4 sm:items-center sm:py-0">
+        <div className="relative w-full max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg bg-gray-900 p-6 shadow-xl">
         {title && (
           <h2 className="mb-4 text-xl font-bold text-white">{title}</h2>
         )}
@@ -27,6 +28,7 @@ export function Modal({ isOpen, onClose, children, title }: ModalProps) {
           <X size={20} className="text-gray-400" />
         </button>
         {children}
+        </div>
       </div>
     </div>
   );

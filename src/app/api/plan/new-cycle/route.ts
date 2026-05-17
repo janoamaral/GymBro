@@ -10,6 +10,17 @@ const newCycleSchema = z.object({
   startDate: z.string().refine((date) => !isNaN(new Date(date).getTime()), "Invalid date format"),
 });
 
+interface ClonedExercise {
+  exerciseId: string;
+  name: string;
+  liftId: "SQ" | "DL" | "BP" | "OHP" | null;
+  method: "531" | "none";
+  unit: "kg" | "lb";
+  repsTarget: number;
+  weight: number;
+  oneRm: unknown;
+}
+
 export async function POST(request: Request) {
   try {
     const user = await getOrCreateCurrentUser();
@@ -35,13 +46,19 @@ export async function POST(request: Request) {
     const updatedProfiles = await Promise.all(
       profiles.map(async (profile) => {
         // Add cycle increment to 1RM
-        const increment = user.cycleIncrement531;
+        const increment = Number(user.cycleIncrement531);
+        const currentOneRm = Number(profile.oneRm.toString());
+
+        if (!Number.isFinite(increment) || !Number.isFinite(currentOneRm)) {
+          throw new Error(`INVALID_PROFILE_VALUES:${profile.id}`);
+        }
+
         const incrementInProfileUnit =
           profile.unit === "kg"
             ? increment
             : increment / 2.2046; // Convert kg to lb if needed
 
-        const newOneRm = Number(profile.oneRm) + incrementInProfileUnit;
+        const newOneRm = Number((currentOneRm + incrementInProfileUnit).toFixed(2));
 
         return db.training531Profile.update({
           where: { id: profile.id },
@@ -77,8 +94,8 @@ export async function POST(request: Request) {
       },
     });
 
-    const sessions: any[] = [];
-    const createdSets: any[] = [];
+    const sessions: Array<Awaited<ReturnType<typeof db.workoutSession.create>>> = [];
+    const createdSets: Array<Awaited<ReturnType<typeof db.exerciseSet.create>>> = [];
 
     // If there are no previous sessions, just create empty sessions for the week
     if (lastWeekSessions.length === 0) {
@@ -110,7 +127,7 @@ export async function POST(request: Request) {
     }
 
     // Extract unique exercises from last week
-    const exerciseMap = new Map<string, any>();
+    const exerciseMap = new Map<string, ClonedExercise>();
 
     lastWeekSessions.forEach((session) => {
       session.sets.forEach((set) => {

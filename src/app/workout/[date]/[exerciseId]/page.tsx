@@ -8,6 +8,7 @@ import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
 interface Set {
   id: string;
   sessionId: string;
+  liftId: 'SQ' | 'DL' | 'BP' | 'OHP' | null;
   setNumber: number;
   repsTarget: number;
   targetWeight: number;
@@ -18,6 +19,10 @@ interface Set {
     id: string;
     name: string;
   };
+}
+
+interface SessionWithSets {
+  sets: Set[];
 }
 
 export default function ExerciseDetailPage() {
@@ -32,6 +37,9 @@ export default function ExerciseDetailPage() {
   const [showCalculator, setShowCalculator] = useState(false);
   const [calculatorWeight, setCalculatorWeight] = useState(0);
   const [calculatorUnit, setCalculatorUnit] = useState<'kg' | 'lb'>('kg');
+  const [exerciseOneRm, setExerciseOneRm] = useState<number | null>(null);
+  const [exerciseLiftId, setExerciseLiftId] = useState<'SQ' | 'DL' | 'BP' | 'OHP' | null>(null);
+  const [oneRmUnit, setOneRmUnit] = useState<'kg' | 'lb' | null>(null);
 
   useEffect(() => {
     const fetchExerciseSets = async () => {
@@ -43,7 +51,7 @@ export default function ExerciseDetailPage() {
 
         // Find all sets for this exercise
         const filteredSets: Set[] = [];
-        data.sessions.forEach((session: any) => {
+        (data.sessions as SessionWithSets[]).forEach((session) => {
           session.sets.forEach((set: Set) => {
             if (set.exercise.id === exerciseId) {
               filteredSets.push(set);
@@ -55,6 +63,30 @@ export default function ExerciseDetailPage() {
 
         if (filteredSets.length > 0) {
           setCalculatorUnit(filteredSets[0].unit as 'kg' | 'lb');
+
+          const firstLiftId = filteredSets[0].liftId;
+          setExerciseLiftId(firstLiftId);
+
+          if (firstLiftId) {
+            const profileRes = await fetch('/api/training/531/profile');
+            if (profileRes.ok) {
+              const profileData = await profileRes.json();
+              const profile = (profileData.profiles ?? []).find(
+                (item: { liftId: string }) => item.liftId === firstLiftId
+              );
+
+              if (profile) {
+                setExerciseOneRm(Number(profile.oneRm));
+                setOneRmUnit(profile.unit as 'kg' | 'lb');
+              } else {
+                setExerciseOneRm(null);
+                setOneRmUnit(null);
+              }
+            }
+          } else {
+            setExerciseOneRm(null);
+            setOneRmUnit(null);
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
@@ -163,6 +195,11 @@ export default function ExerciseDetailPage() {
                 day: 'numeric',
               })}
             </p>
+            {exerciseOneRm !== null && oneRmUnit && (
+              <p className="text-sm text-gray-300 mt-1">
+                1RM ({exerciseLiftId}): {exerciseOneRm} {oneRmUnit}
+              </p>
+            )}
           </div>
         </div>
 

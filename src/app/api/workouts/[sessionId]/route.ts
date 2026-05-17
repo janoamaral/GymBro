@@ -66,3 +66,43 @@ export async function PATCH(
     );
   }
 }
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ sessionId: string }> },
+) {
+  try {
+    const user = await getOrCreateCurrentUser();
+    const { sessionId } = await context.params;
+
+    const session = await db.workoutSession.findFirst({
+      where: {
+        id: sessionId,
+        userId: user.id,
+      },
+      select: { id: true },
+    });
+
+    if (!session) {
+      return NextResponse.json({ error: "SESSION_NOT_FOUND" }, { status: 404 });
+    }
+
+    await db.workoutSession.delete({
+      where: { id: sessionId },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+
+    return NextResponse.json(
+      {
+        error: "FAILED_TO_DELETE_WORKOUT",
+        detail: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    );
+  }
+}

@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus } from 'lucide-react';
 import { ExerciseFormModal, Exercise } from '@/components/plan-wizard/exercise-form-modal';
 import { ExerciseList } from '@/components/plan-wizard/exercise-list';
 import { Toggle } from '@/components/ui/toggle';
@@ -86,6 +85,7 @@ export default function PlanPage() {
           liftId: ex.liftId,
           method: ex.method,
           oneRm: ex.oneRm,
+          sets: ex.sets,
           weight: ex.weight,
           reps: ex.reps,
           unit: ex.unit,

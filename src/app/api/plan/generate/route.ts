@@ -3,17 +3,39 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getOrCreateCurrentUser } from "@/lib/current-user";
 import { UnauthorizedError } from "@/lib/http-errors";
-import { generate531Session, calculateTm, tmForCycle } from "@/lib/training/531";
+import { generate531Session, tmForCycle } from "@/lib/training/531";
 import { calculatePlateLoadPerSide } from "@/lib/training/plate-calculator";
+
+const setSchema = z.object({
+  weight: z.number().positive(),
+  reps: z.number().int().positive(),
+});
 
 const exerciseSchema = z.object({
   name: z.string().min(1),
   liftId: z.enum(["SQ", "DL", "BP", "OHP"]).optional(),
   method: z.enum(["531", "none"]),
   oneRm: z.number().positive().optional(),
+  sets: z.array(setSchema).min(1).optional(),
   weight: z.number().positive().optional(),
   reps: z.number().int().positive().optional(),
   unit: z.enum(["kg", "lb"]),
+}).superRefine((exercise, context) => {
+  if (exercise.method === "531" && !exercise.oneRm) {
+    context.addIssue({
+      code: "custom",
+      message: "oneRm is required for 5/3/1 exercises",
+      path: ["oneRm"],
+    });
+  }
+
+  if (exercise.method === "none" && !exercise.sets?.length && !(exercise.weight && exercise.reps)) {
+    context.addIssue({
+      code: "custom",
+      message: "At least one set is required for non-5/3/1 exercises",
+      path: ["sets"],
+    });
+  }
 });
 
 const generatePlanSchema = z.object({
@@ -33,12 +55,17 @@ export async function POST(request: Request) {
     startDate.setUTCHours(0, 0, 0, 0);
 
     const exercises = payload.exercises;
+    const has531Exercises = exercises.some((exercise) => exercise.method === "531");
+    const shouldIncludeDeload = has531Exercises && payload.weekNumber === 3 && !payload.generateMonthly;
+
     const weeksToGenerate = payload.generateMonthly
       ? Array.from({ length: 5 - payload.weekNumber }, (_, i) => payload.weekNumber + i)
-      : [payload.weekNumber];
+      : shouldIncludeDeload
+        ? [3, 4]
+        : [payload.weekNumber];
 
-    const sessions: any[] = [];
-    const createdSets: any[] = [];
+    const sessions: Array<Awaited<ReturnType<typeof db.workoutSession.create>>> = [];
+    const createdSets: Array<Awaited<ReturnType<typeof db.exerciseSet.create>>> = [];
 
     // For each week to generate
     for (const weekNum of weeksToGenerate) {
@@ -102,7 +129,6 @@ export async function POST(request: Request) {
           const tm = tmForCycle(exercise.oneRm, exercise.liftId, exercise.unit as "kg" | "lb", 1);
 
           // Generate 531 sets for this week
-          // Generate 531 sets for this week
           const plan = generate531Session({
             tm,
             weekNumber: weekNum as 1 | 2 | 3 | 4,
@@ -136,29 +162,36 @@ export async function POST(request: Request) {
 
             createdSets.push(set);
           }
-        } else if (exercise.method === "none" && exercise.weight && exercise.reps) {
-          // Create a single set with the given weight and reps
-          const plateCalc = calculatePlateLoadPerSide(
-            {
-              targetWeight: exercise.weight,
-              barbellWeight: 20,
-              unit: exercise.unit as "kg" | "lb",
-            }
-          );
+        } else if (exercise.method === "none") {
+          const setsToCreate = exercise.sets?.length
+            ? exercise.sets
+            : exercise.weight && exercise.reps
+              ? [{ weight: exercise.weight, reps: exercise.reps }]
+              : [];
 
-          const set = await db.exerciseSet.create({
-            data: {
-              sessionId: session.id,
-              exerciseId: exerciseRecord.id,
-              setNumber: 1,
-              repsTarget: exercise.reps,
-              targetWeight: exercise.weight,
-              unit: exercise.unit as "kg" | "lb",
-              perSideWeight: Number(plateCalc.roundedPerSide),
-            },
-          });
+          for (const [index, customSet] of setsToCreate.entries()) {
+            const plateCalc = calculatePlateLoadPerSide(
+              {
+                targetWeight: customSet.weight,
+                barbellWeight: 20,
+                unit: exercise.unit as "kg" | "lb",
+              }
+            );
 
-          createdSets.push(set);
+            const set = await db.exerciseSet.create({
+              data: {
+                sessionId: session.id,
+                exerciseId: exerciseRecord.id,
+                setNumber: index + 1,
+                repsTarget: customSet.reps,
+                targetWeight: customSet.weight,
+                unit: exercise.unit as "kg" | "lb",
+                perSideWeight: Number(plateCalc.roundedPerSide),
+              },
+            });
+
+            createdSets.push(set);
+          }
         }
       }
     }

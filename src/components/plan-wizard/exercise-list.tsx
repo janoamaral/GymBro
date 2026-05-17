@@ -14,6 +14,27 @@ export function ExerciseList({
   onEdit,
   onDelete,
 }: ExerciseListProps) {
+  const formatNon531Summary = (exercise: Exercise) => {
+    const sets = exercise.sets ??
+      (exercise.weight && exercise.reps ? [{ weight: exercise.weight, reps: exercise.reps }] : []);
+
+    if (sets.length === 0) {
+      return 'Sin sets definidos';
+    }
+
+    const allIdentical = sets.every(
+      (set) => set.weight === sets[0].weight && set.reps === sets[0].reps
+    );
+
+    if (allIdentical) {
+      return `${sets.length} x ${sets[0].reps} reps @ ${sets[0].weight} ${exercise.unit}`;
+    }
+
+    return sets
+      .map((set, index) => `S${index + 1}: ${set.reps} @ ${set.weight} ${exercise.unit}`)
+      .join(' • ');
+  };
+
   if (exercises.length === 0) {
     return (
       <div className="text-center py-8 text-gray-400">
@@ -34,7 +55,7 @@ export function ExerciseList({
             <p className="text-sm text-gray-400">
               {exercise.method === '531' 
                 ? `1RM: ${exercise.oneRm} ${exercise.unit}`
-                : `${exercise.weight} ${exercise.unit} x ${exercise.reps} reps`}
+                : formatNon531Summary(exercise)}
             </p>
           </div>
           <div className="flex gap-2">

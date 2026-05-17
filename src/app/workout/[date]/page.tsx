@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Trash2 } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface Set {
   id: string;
@@ -22,14 +23,22 @@ interface ExerciseGroup {
   sets: Set[];
 }
 
+interface SessionWithSets {
+  id: string;
+  sets: Set[];
+}
+
 export default function WorkoutDayPage() {
   const router = useRouter();
   const params = useParams();
   const date = params.date as string;
 
   const [exercises, setExercises] = useState<ExerciseGroup[]>([]);
+  const [sessionIds, setSessionIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const fetchSessionsForDay = async () => {
@@ -42,7 +51,10 @@ export default function WorkoutDayPage() {
         // Group sets by exercise
         const groupMap = new Map<string, ExerciseGroup>();
 
-        data.sessions.forEach((session: any) => {
+        const sessions = data.sessions as SessionWithSets[];
+        setSessionIds(sessions.map((session) => session.id));
+
+        sessions.forEach((session) => {
           session.sets.forEach((set: Set) => {
             const key = set.exercise.id;
             if (!groupMap.has(key)) {
@@ -67,6 +79,38 @@ export default function WorkoutDayPage() {
     fetchSessionsForDay();
   }, [date]);
 
+  const handleDeleteWorkout = async () => {
+    if (sessionIds.length === 0) {
+      setShowDeleteConfirm(false);
+      return;
+    }
+
+    setDeleting(true);
+    setError('');
+
+    try {
+      const responses = await Promise.all(
+        sessionIds.map((sessionId) =>
+          fetch(`/api/workouts/${sessionId}`, {
+            method: 'DELETE',
+          })
+        )
+      );
+
+      const hasError = responses.some((response) => !response.ok);
+      if (hasError) {
+        throw new Error('No se pudo eliminar el workout');
+      }
+
+      router.push('/');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   if (loading) {
     return (
       <main className="min-h-full bg-gray-900 px-4 py-8">
@@ -87,24 +131,35 @@ export default function WorkoutDayPage() {
     <main className="min-h-full bg-gray-900 px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-8 flex items-center gap-4">
-          <button
-            onClick={() => router.back()}
-            className="p-2 hover:bg-gray-800 rounded transition-colors"
-          >
-            <ArrowLeft size={24} className="text-white" />
-          </button>
-          <div>
-            <h1 className="text-4xl font-bold text-white">Workout</h1>
-            <p className="text-gray-400">
-              {new Date(date).toLocaleDateString('es-ES', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </p>
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.back()}
+              className="p-2 hover:bg-gray-800 rounded transition-colors"
+            >
+              <ArrowLeft size={24} className="text-white" />
+            </button>
+            <div>
+              <h1 className="text-4xl font-bold text-white">Workout</h1>
+              <p className="text-gray-400">
+                {new Date(date).toLocaleDateString('es-ES', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </p>
+            </div>
           </div>
+
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={sessionIds.length === 0 || deleting}
+            className="flex items-center gap-2 rounded bg-red-500/20 px-4 py-2 text-sm font-medium text-red-200 transition-colors hover:bg-red-500/30 disabled:opacity-50"
+          >
+            <Trash2 size={16} />
+            {deleting ? 'Eliminando...' : 'Eliminar workout'}
+          </button>
         </div>
 
         {/* Exercises List */}
@@ -131,6 +186,17 @@ export default function WorkoutDayPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Eliminar Workout"
+        message="Esta acción eliminará este workout y todos sus sets. ¿Deseas continuar?"
+        onConfirm={handleDeleteWorkout}
+        onCancel={() => setShowDeleteConfirm(false)}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        isDanger
+      />
     </main>
   );
 }

@@ -89,9 +89,8 @@ export function calculateTm(oneRm: number, unit: WeightUnit): number {
   }
 
   const granularity = granularityForUnit(unit);
-  const rawTm = oneRm * 0.9;
-  const floored = Math.floor(rawTm / granularity) * granularity;
-  return Math.max(granularity, roundTo(floored, 2));
+  const rounded = roundToGranularity(oneRm, unit, "nearest");
+  return Math.max(granularity, roundTo(rounded, 2));
 }
 
 export function tmForCycle(oneRm: number, liftId: LiftId, unit: WeightUnit, cycleNumber: number): number {
