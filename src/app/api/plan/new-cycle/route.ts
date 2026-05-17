@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getOrCreateCurrentUser } from "@/lib/current-user";
 import { UnauthorizedError } from "@/lib/http-errors";
-import { generate531Session, calculateTm, tmForCycle } from "@/lib/training/531";
+import { generate531Session, tmForCycle } from "@/lib/training/531";
 import { calculatePlateLoadPerSide } from "@/lib/training/plate-calculator";
 
 const newCycleSchema = z.object({
@@ -18,7 +18,7 @@ interface ClonedExercise {
   unit: "kg" | "lb";
   repsTarget: number;
   weight: number;
-  oneRm: unknown;
+  oneRm: number | null;
 }
 
 export async function POST(request: Request) {
@@ -141,7 +141,10 @@ export async function POST(request: Request) {
             unit: set.unit,
             repsTarget: set.repsTarget,
             weight: Number(set.targetWeight),
-            oneRm: updatedProfiles.find((p) => p.liftId === set.liftId)?.oneRm,
+            oneRm: (() => {
+              const profileOneRm = updatedProfiles.find((p) => p.liftId === set.liftId)?.oneRm;
+              return profileOneRm == null ? null : Number(profileOneRm.toString());
+            })(),
           });
         }
       });
