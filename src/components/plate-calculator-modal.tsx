@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/modal';
 import {
   calculatePlateLoadPerSide,
@@ -8,10 +8,10 @@ import {
 } from '@/lib/training/plate-calculator';
 
 interface PlateCalculatorModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  targetWeight: number;
-  unit: 'kg' | 'lb';
+  readonly isOpen: boolean;
+  readonly onClose: () => void;
+  readonly targetWeight: number;
+  readonly unit: 'kg' | 'lb';
 }
 
 export function PlateCalculatorModal({
@@ -21,26 +21,43 @@ export function PlateCalculatorModal({
   unit,
 }: PlateCalculatorModalProps) {
   const [barbellWeight, setBarbellWeight] = useState(unit === 'kg' ? 20 : 45);
-  const [result, setResult] = useState<any>(null);
-  const [plates, setPlates] = useState<number[]>([]);
-
-  useEffect(() => {
-    if (targetWeight > barbellWeight) {
-      const calc = calculatePlateLoadPerSide({
-        targetWeight,
-        barbellWeight,
-        unit,
-        roundingMode: 'up',
-      });
-      setResult(calc);
-
-      const suggested = suggestPlatesPerSide(Number(calc.perSide), unit);
-      setPlates(suggested);
+  const result = useMemo(() => {
+    if (targetWeight <= barbellWeight) {
+      return null;
     }
+
+    return calculatePlateLoadPerSide({
+      targetWeight,
+      barbellWeight,
+      unit,
+      roundingMode: 'up',
+    });
   }, [targetWeight, barbellWeight, unit]);
 
+  const plates = useMemo(() => {
+    if (!result) {
+      return [];
+    }
+
+    return suggestPlatesPerSide(Number(result.perSide), unit);
+  }, [result, unit]);
+
+  const plateBadges = useMemo(() => {
+    const counts = new Map<number, number>();
+
+    return plates.map((plate) => {
+      const nextCount = (counts.get(plate) ?? 0) + 1;
+      counts.set(plate, nextCount);
+
+      return {
+        plate,
+        key: `${plate}-${nextCount}`,
+      };
+    });
+  }, [plates]);
+
   const handleBarbellChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseFloat(e.target.value);
+    const val = Number.parseFloat(e.target.value);
     if (val > 0) {
       setBarbellWeight(val);
     }
@@ -56,14 +73,16 @@ export function PlateCalculatorModal({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label htmlFor="barbell-weight" className="block text-sm font-medium text-gray-300 mb-2">
             Barbell Weight
           </label>
           <input
+            id="barbell-weight"
             type="number"
             step="0.5"
             value={barbellWeight}
             onChange={handleBarbellChange}
+            title="Peso de la barra"
             className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
           />
         </div>
@@ -95,9 +114,9 @@ export function PlateCalculatorModal({
               <div className="bg-gray-700 rounded p-3">
                 <p className="text-sm font-medium text-gray-300 mb-2">Plate Suggestion</p>
                 <div className="flex flex-wrap gap-2">
-                  {plates.map((plate, idx) => (
+                  {plateBadges.map(({ plate, key }) => (
                     <span
-                      key={idx}
+                      key={key}
                       className="bg-[#d6ff43] text-gray-900 px-3 py-1 rounded font-semibold"
                     >
                       {plate}

@@ -13,6 +13,10 @@ interface MainDashboardProps {
   readonly userPicture: string | null;
 }
 
+type CalendarDateItem = {
+  date: string;
+};
+
 export default function MainDashboard({
   userName,
   userPicture,
@@ -38,7 +42,7 @@ export default function MainDashboard({
         const data = await res.json();
 
         if (data.dates) {
-          setWorkoutDates(data.dates.map((d: any) => d.date));
+          setWorkoutDates((data.dates as CalendarDateItem[]).map((d) => d.date));
         }
       } catch (error) {
         console.error('Failed to fetch calendar data:', error);
@@ -72,7 +76,12 @@ export default function MainDashboard({
       <div className="mb-8">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-full border border-white/20 bg-gray-800 p-1 shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
+            <button
+              onClick={() => router.push('/settings')}
+              className="h-14 w-14 rounded-full border border-white/20 bg-gray-800 p-1 shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-colors hover:border-[#d6ff43]"
+              title="Abrir configuración"
+              aria-label="Abrir configuración"
+            >
               {userPicture ? (
                 <img
                   src={userPicture}
@@ -84,7 +93,7 @@ export default function MainDashboard({
                   {userInitial}
                 </div>
               )}
-            </div>
+            </button>
             <div>
               <p className="text-sm text-gray-300">Hello there!</p>
               <h1 className="mt-1 text-xl font-bold text-white">{userName}</h1>

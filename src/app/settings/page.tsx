@@ -4,23 +4,69 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
+type LiftId = 'SQ' | 'DL' | 'BP' | 'OHP';
+
+type TrainingProfile = {
+  liftId: LiftId;
+  oneRm: number;
+  cycleNumber: number;
+  unit: 'kg' | 'lb';
+};
+
 export default function SettingsPage() {
   const router = useRouter();
-  const [cycleIncrement531, setCycleIncrement531] = useState(5.0);
+  const [cycleIncrement531, setCycleIncrement531] = useState(5);
+  const [displayName, setDisplayName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [profiles, setProfiles] = useState<TrainingProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error'>('success');
+
+  const showMessage = (text: string, type: 'success' | 'error' = 'success') => {
+    setMessageType(type);
+    setMessage(text);
+    setTimeout(() => setMessage(''), 3000);
+  };
 
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const res = await fetch('/api/user/settings');
-        const data = await res.json();
-        if (data.settings) {
-          setCycleIncrement531(data.settings.cycleIncrement531);
+        const [settingsRes, profileRes] = await Promise.all([
+          fetch('/api/user/settings'),
+          fetch('/api/training/531/profile'),
+        ]);
+
+        const settingsData = await settingsRes.json();
+        const profileData = await profileRes.json();
+
+        if (settingsData.settings) {
+          setCycleIncrement531(settingsData.settings.cycleIncrement531);
+          setDisplayName(settingsData.settings.displayName ?? '');
+          setAvatarUrl(settingsData.settings.avatarUrl ?? '');
+        }
+
+        if (Array.isArray(profileData.profiles)) {
+          const parsedProfiles = profileData.profiles as Array<{
+            liftId: LiftId;
+            oneRm: number | string;
+            cycleNumber: number;
+            unit: 'kg' | 'lb';
+          }>;
+
+          setProfiles(
+            parsedProfiles.map((profile) => ({
+              liftId: profile.liftId,
+              oneRm: Number(profile.oneRm),
+              cycleNumber: Number(profile.cycleNumber),
+              unit: profile.unit,
+            }))
+          );
         }
       } catch (error) {
         console.error('Failed to fetch settings:', error);
+        showMessage('No se pudo cargar la configuración', 'error');
       } finally {
         setLoading(false);
       }
@@ -34,23 +80,87 @@ export default function SettingsPage() {
     setMessage('');
 
     try {
-      const res = await fetch('/api/user/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cycleIncrement531 }),
+      const requests: Promise<Response>[] = [
+        fetch('/api/user/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cycleIncrement531,
+            displayName: displayName.trim(),
+            avatarUrl: avatarUrl.trim(),
+          }),
+        }),
+      ];
+
+      profiles.forEach((profile) => {
+        requests.push(
+          fetch('/api/training/531/profile', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              liftId: profile.liftId,
+              oneRm: profile.oneRm,
+              cycleNumber: profile.cycleNumber,
+              unit: profile.unit,
+            }),
+          })
+        );
       });
 
-      if (!res.ok) {
-        throw new Error('Failed to save settings');
+      const responses = await Promise.all(requests);
+      const hasError = responses.some((res) => !res.ok);
+      if (hasError) {
+        throw new Error('No se pudo guardar toda la configuración');
       }
 
-      setMessage('Configuración guardada exitosamente');
-      setTimeout(() => setMessage(''), 3000);
+      showMessage('Configuración guardada exitosamente', 'success');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'An error occurred');
+      showMessage(error instanceof Error ? error.message : 'An error occurred', 'error');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleProfileChange = (
+    liftId: LiftId,
+    field: 'oneRm' | 'cycleNumber' | 'unit',
+    value: string
+  ) => {
+    setProfiles((current) =>
+      current.map((profile) => {
+        if (profile.liftId !== liftId) {
+          return profile;
+        }
+
+        if (field === 'unit') {
+          return { ...profile, unit: value as 'kg' | 'lb' };
+        }
+
+        if (field === 'cycleNumber') {
+          const parsed = Number.parseInt(value, 10);
+          return {
+            ...profile,
+            cycleNumber: Number.isFinite(parsed) ? Math.max(1, parsed) : profile.cycleNumber,
+          };
+        }
+
+        const parsed = Number.parseFloat(value);
+        return {
+          ...profile,
+          oneRm: Number.isFinite(parsed) ? Math.max(0.5, parsed) : profile.oneRm,
+        };
+      })
+    );
+  };
+
+  const handleResetCycles = () => {
+    setProfiles((current) =>
+      current.map((profile) => ({
+        ...profile,
+        cycleNumber: 1,
+      }))
+    );
+    showMessage('Ciclos reseteados a 1. Guarda para confirmar cambios.');
   };
 
   if (loading) {
@@ -68,6 +178,8 @@ export default function SettingsPage() {
         <div className="mb-8 flex items-center gap-4">
           <button
             onClick={() => router.back()}
+            title="Volver"
+            aria-label="Volver"
             className="p-2 hover:bg-gray-800 rounded transition-colors"
           >
             <ArrowLeft size={24} className="text-white" />
@@ -76,7 +188,13 @@ export default function SettingsPage() {
         </div>
 
         {message && (
-          <div className="mb-4 bg-green-500/20 border border-green-500 rounded p-3 text-green-200">
+          <div
+            className={`mb-4 rounded border p-3 ${
+              messageType === 'success'
+                ? 'border-green-500 bg-green-500/20 text-green-200'
+                : 'border-red-500 bg-red-500/20 text-red-200'
+            }`}
+          >
             {message}
           </div>
         )}
@@ -84,7 +202,41 @@ export default function SettingsPage() {
         {/* Settings Form */}
         <div className="bg-gray-800 rounded-lg p-6 space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <h2 className="text-lg font-semibold text-white">Perfil</h2>
+            <p className="text-xs text-gray-400 mt-1 mb-4">
+              Este alias y esta imagen se mostrarán en el saludo del dashboard.
+            </p>
+
+            <div className="space-y-4">
+              <label htmlFor="display-name" className="block text-sm font-medium text-gray-300">
+                Alias / Nombre
+              </label>
+              <input
+                id="display-name"
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                maxLength={80}
+                placeholder="Ej: Jano"
+                className="w-full rounded border border-gray-600 bg-gray-700 px-3 py-2 text-white focus:outline-none focus:border-[#d6ff43]"
+              />
+
+              <label htmlFor="avatar-url" className="block text-sm font-medium text-gray-300">
+                Link de imagen (avatar)
+              </label>
+              <input
+                id="avatar-url"
+                type="url"
+                value={avatarUrl}
+                onChange={(e) => setAvatarUrl(e.target.value)}
+                placeholder="https://..."
+                className="w-full rounded border border-gray-600 bg-gray-700 px-3 py-2 text-white focus:outline-none focus:border-[#d6ff43]"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="cycle-increment" className="block text-sm font-medium text-gray-300 mb-2">
               Incremento por Ciclo 5/3/1
             </label>
             <p className="text-xs text-gray-400 mb-3">
@@ -92,10 +244,16 @@ export default function SettingsPage() {
             </p>
             <div className="flex gap-2 items-center">
               <input
+                id="cycle-increment"
                 type="number"
                 step="0.5"
                 value={cycleIncrement531}
-                onChange={(e) => setCycleIncrement531(parseFloat(e.target.value))}
+                onChange={(e) => {
+                  const value = Number.parseFloat(e.target.value);
+                  if (Number.isFinite(value)) {
+                    setCycleIncrement531(value);
+                  }
+                }}
                 min="0.5"
                 max="50"
                 className="w-24 bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
@@ -104,7 +262,84 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          <div className="border-t border-gray-700 pt-6">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Perfiles 5/3/1</h2>
+                <p className="text-xs text-gray-400">
+                  Edita 1RM y ciclo actual por levantamiento.
+                </p>
+              </div>
+              <button
+                onClick={handleResetCycles}
+                className="rounded bg-gray-700 px-3 py-2 text-sm text-white transition-colors hover:bg-gray-600"
+              >
+                Resetear ciclos
+              </button>
+            </div>
+
+            {profiles.length === 0 ? (
+              <p className="text-sm text-gray-400">No hay perfiles 5/3/1 cargados.</p>
+            ) : (
+              <div className="space-y-3">
+                {profiles.map((profile) => (
+                  <div
+                    key={profile.liftId}
+                    className="grid grid-cols-1 gap-3 rounded bg-gray-700/60 p-3 sm:grid-cols-4"
+                  >
+                    <div>
+                      <p className="text-xs text-gray-400">Lift</p>
+                      <p className="text-sm font-semibold text-white">{profile.liftId}</p>
+                    </div>
+
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-gray-400">1RM</span>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0.5"
+                        value={profile.oneRm}
+                        onChange={(e) => handleProfileChange(profile.liftId, 'oneRm', e.target.value)}
+                        className="w-full rounded border border-gray-600 bg-gray-800 px-3 py-2 text-white focus:outline-none focus:border-[#d6ff43]"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-gray-400">Ciclo</span>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={profile.cycleNumber}
+                        onChange={(e) => handleProfileChange(profile.liftId, 'cycleNumber', e.target.value)}
+                        className="w-full rounded border border-gray-600 bg-gray-800 px-3 py-2 text-white focus:outline-none focus:border-[#d6ff43]"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-gray-400">Unidad</span>
+                      <select
+                        value={profile.unit}
+                        onChange={(e) => handleProfileChange(profile.liftId, 'unit', e.target.value)}
+                        className="w-full rounded border border-gray-600 bg-gray-800 px-3 py-2 text-white focus:outline-none focus:border-[#d6ff43]"
+                      >
+                        <option value="kg">kg</option>
+                        <option value="lb">lb</option>
+                      </select>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-3 justify-end pt-4">
+            <a
+              href="/auth/logout"
+              className="mr-auto px-4 py-2 rounded border border-red-500/70 text-red-200 hover:bg-red-500/20 transition-colors"
+            >
+              Cerrar sesión
+            </a>
             <button
               onClick={() => router.back()}
               className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors"

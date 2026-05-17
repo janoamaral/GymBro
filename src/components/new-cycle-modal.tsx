@@ -11,9 +11,9 @@ interface Profile {
 }
 
 interface NewCycleModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onStart: (startDate: string) => void;
+  readonly isOpen: boolean;
+  readonly onClose: () => void;
+  readonly onStart: (startDate: string) => void;
 }
 
 export function NewCycleModal({
@@ -26,20 +26,6 @@ export function NewCycleModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchProfiles();
-      // Set default start date to next Monday
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const dayOfWeek = tomorrow.getDay();
-      const daysToMonday = (dayOfWeek === 0 ? 1 : 8 - dayOfWeek);
-      const nextMonday = new Date(tomorrow);
-      nextMonday.setDate(nextMonday.getDate() + daysToMonday);
-      setStartDate(nextMonday.toISOString().split('T')[0]);
-    }
-  }, [isOpen]);
-
   const fetchProfiles = async () => {
     try {
       const res = await fetch('/api/training/531/profile');
@@ -51,12 +37,28 @@ export function NewCycleModal({
     }
   };
 
-  const handleStart = async () => {
-    if (!startDate) {
-      setError('Please select a start date');
-      return;
-    }
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dayOfWeek = tomorrow.getDay();
+  const daysToMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+  const nextMonday = new Date(tomorrow);
+  nextMonday.setDate(nextMonday.getDate() + daysToMonday);
+  const defaultStartDate = nextMonday.toISOString().split('T')[0];
+  const effectiveStartDate = startDate || defaultStartDate;
 
+  useEffect(() => {
+    if (isOpen) {
+      const timer = window.setTimeout(() => {
+        void fetchProfiles();
+      }, 0);
+
+      return () => {
+        window.clearTimeout(timer);
+      };
+    }
+  }, [isOpen]);
+
+  const handleStart = async () => {
     setLoading(true);
     setError('');
 
@@ -64,7 +66,7 @@ export function NewCycleModal({
       const res = await fetch('/api/plan/new-cycle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ startDate }),
+        body: JSON.stringify({ startDate: effectiveStartDate }),
       });
 
       if (!res.ok) {
@@ -72,7 +74,7 @@ export function NewCycleModal({
         throw new Error(data.detail || 'Failed to start new cycle');
       }
 
-      onStart(startDate);
+      onStart(effectiveStartDate);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -98,13 +100,15 @@ export function NewCycleModal({
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label htmlFor="new-cycle-start-date" className="block text-sm font-medium text-gray-300 mb-2">
             Start Date for New Cycle
           </label>
           <input
+            id="new-cycle-start-date"
             type="date"
-            value={startDate}
+            value={effectiveStartDate}
             onChange={(e) => setStartDate(e.target.value)}
+            title="Seleccionar fecha de inicio"
             className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
           />
         </div>

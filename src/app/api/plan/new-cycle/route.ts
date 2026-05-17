@@ -7,18 +7,42 @@ import { generate531Session, tmForCycle } from "@/lib/training/531";
 import { calculatePlateLoadPerSide } from "@/lib/training/plate-calculator";
 
 const newCycleSchema = z.object({
-  startDate: z.string().refine((date) => !isNaN(new Date(date).getTime()), "Invalid date format"),
+  startDate: z.string().refine((date) => !Number.isNaN(new Date(date).getTime()), "Invalid date format"),
 });
 
-interface ClonedExercise {
+type TemplateSet = {
   exerciseId: string;
-  name: string;
+  exerciseName: string;
   liftId: "SQ" | "DL" | "BP" | "OHP" | null;
-  method: "531" | "none";
-  unit: "kg" | "lb";
+  setNumber: number;
   repsTarget: number;
-  weight: number;
-  oneRm: number | null;
+  targetWeight: number;
+  unit: "kg" | "lb";
+};
+
+type TemplateSession = {
+  title: string;
+  weekday: number;
+  sets: TemplateSet[];
+};
+
+function startOfUtcDay(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0));
+}
+
+function endOfUtcDay(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999));
+}
+
+function addUtcDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function nextWeekdayOnOrAfter(date: Date, weekday: number): Date {
+  const dayDiff = (weekday - date.getUTCDay() + 7) % 7;
+  return addUtcDays(date, dayDiff);
 }
 
 export async function POST(request: Request) {
@@ -42,21 +66,86 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update all profiles with new cycle
+    // Build a week template from the latest week that has sessions with sets.
+    const latestSessionWithSets = await db.workoutSession.findFirst({
+      where: {
+        userId: user.id,
+        sets: {
+          some: {},
+        },
+      },
+      orderBy: {
+        startedAt: "desc",
+      },
+      select: {
+        startedAt: true,
+      },
+    });
+
+    if (!latestSessionWithSets) {
+      return NextResponse.json(
+        {
+          error: "NO_TEMPLATE_WORKOUTS",
+          detail: "No workouts with exercises found to clone for the new cycle",
+        },
+        { status: 400 },
+      );
+    }
+
+    const templateWeekEnd = endOfUtcDay(startOfUtcDay(latestSessionWithSets.startedAt));
+    const templateWeekStart = addUtcDays(startOfUtcDay(latestSessionWithSets.startedAt), -6);
+
+    const templateSourceSessions = await db.workoutSession.findMany({
+      where: {
+        userId: user.id,
+        startedAt: {
+          gte: templateWeekStart,
+          lte: templateWeekEnd,
+        },
+        sets: {
+          some: {},
+        },
+      },
+      include: {
+        sets: {
+          orderBy: {
+            setNumber: "asc",
+          },
+          include: {
+            exercise: true,
+          },
+        },
+      },
+      orderBy: [{ startedAt: "asc" }, { createdAt: "asc" }],
+    });
+
+    const sessions: Array<Awaited<ReturnType<typeof db.workoutSession.create>>> = [];
+    const createdSets: Array<Awaited<ReturnType<typeof db.exerciseSet.create>>> = [];
+
+    if (templateSourceSessions.length === 0) {
+      return NextResponse.json(
+        {
+          error: "NO_TEMPLATE_WORKOUTS",
+          detail: "No workouts with exercises found to clone for the new cycle",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Update all profiles with new cycle only after we know we can build sessions.
     const updatedProfiles = await Promise.all(
       profiles.map(async (profile) => {
-        // Add cycle increment to 1RM
         const increment = Number(user.cycleIncrement531);
         const currentOneRm = Number(profile.oneRm.toString());
 
         if (!Number.isFinite(increment) || !Number.isFinite(currentOneRm)) {
-          throw new Error(`INVALID_PROFILE_VALUES:${profile.id}`);
+          throw new TypeError(`INVALID_PROFILE_VALUES:${profile.id}`);
         }
 
         const incrementInProfileUnit =
           profile.unit === "kg"
             ? increment
-            : increment / 2.2046; // Convert kg to lb if needed
+            : increment / 2.2046;
 
         const newOneRm = Number((currentOneRm + incrementInProfileUnit).toFixed(2));
 
@@ -70,165 +159,128 @@ export async function POST(request: Request) {
       }),
     );
 
-    // Get the last completed week's sessions to extract exercises
-    // We'll look for sessions in the past 7-14 days
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const fourteenDaysAgo = new Date();
-    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    const templateSessions: TemplateSession[] = templateSourceSessions.map((session) => ({
+      title: session.title,
+      weekday: session.startedAt.getUTCDay(),
+      sets: session.sets.map((set) => ({
+        exerciseId: set.exerciseId,
+        exerciseName: set.exercise.name,
+        liftId: set.liftId,
+        setNumber: set.setNumber,
+        repsTarget: set.repsTarget,
+        targetWeight: Number(set.targetWeight),
+        unit: set.unit,
+      })),
+    }));
 
-    const lastWeekSessions = await db.workoutSession.findMany({
-      where: {
-        userId: user.id,
-        startedAt: {
-          gte: fourteenDaysAgo,
-          lte: sevenDaysAgo,
-        },
-      },
-      include: {
-        sets: {
-          include: {
-            exercise: true,
-          },
-        },
-      },
-    });
+    const profileByLift = new Map(
+      updatedProfiles.map((profile) => [profile.liftId, profile] as const),
+    );
 
-    const sessions: Array<Awaited<ReturnType<typeof db.workoutSession.create>>> = [];
-    const createdSets: Array<Awaited<ReturnType<typeof db.exerciseSet.create>>> = [];
-
-    // If there are no previous sessions, just create empty sessions for the week
-    if (lastWeekSessions.length === 0) {
-      // Create 4 empty sessions for the new week (one week, 4 days like the standard 5/3/1 split)
-      for (let i = 0; i < 4; i++) {
-        const sessionDate = new Date(startDate);
-        sessionDate.setDate(sessionDate.getDate() + i * 2); // Every other day
+    // Build a full 4-week cycle preserving each template session weekday.
+    for (let weekNumber = 1; weekNumber <= 4; weekNumber++) {
+      const cycleWeek = weekNumber as 1 | 2 | 3 | 4;
+      for (const templateSession of templateSessions) {
+        const firstSessionDate = nextWeekdayOnOrAfter(startDate, templateSession.weekday);
+        const sessionDate = addUtcDays(firstSessionDate, (weekNumber - 1) * 7);
 
         const session = await db.workoutSession.create({
           data: {
             userId: user.id,
-            title: `Cycle ${updatedProfiles[0].cycleNumber} - Day ${i + 1} - ${sessionDate.toLocaleDateString()}`,
+            title: `Cycle ${updatedProfiles[0].cycleNumber} Week ${weekNumber} - ${templateSession.title}`,
             startedAt: sessionDate,
           },
         });
 
         sessions.push(session);
-      }
 
-      return NextResponse.json(
-        {
-          sessions,
-          createdSets,
-          profiles: updatedProfiles,
-          message: "New cycle started with no exercises to clone",
-        },
-        { status: 201 },
-      );
-    }
+        const setsByExercise = new Map<string, TemplateSet[]>();
+        templateSession.sets.forEach((set) => {
+          const key = set.exerciseId;
+          const group = setsByExercise.get(key) ?? [];
+          group.push(set);
+          setsByExercise.set(key, group);
+        });
 
-    // Extract unique exercises from last week
-    const exerciseMap = new Map<string, ClonedExercise>();
+        for (const groupedSets of setsByExercise.values()) {
+          const firstSet = groupedSets[0];
+          if (!firstSet) {
+            continue;
+          }
 
-    lastWeekSessions.forEach((session) => {
-      session.sets.forEach((set) => {
-        const key = set.exercise.id;
-        if (!exerciseMap.has(key)) {
-          exerciseMap.set(key, {
-            exerciseId: set.exercise.id,
-            name: set.exercise.name,
-            liftId: set.liftId,
-            method: set.liftId ? "531" : "none",
-            unit: set.unit,
-            repsTarget: set.repsTarget,
-            weight: Number(set.targetWeight),
-            oneRm: (() => {
-              const profileOneRm = updatedProfiles.find((p) => p.liftId === set.liftId)?.oneRm;
-              return profileOneRm == null ? null : Number(profileOneRm.toString());
-            })(),
-          });
-        }
-      });
-    });
+          const hasLiftId = groupedSets.some((set) => set.liftId !== null);
+          const looksLikeAssistance = /\s(BBB|FSL)$/i.test(firstSet.exerciseName);
 
-    // Generate sessions for the new cycle (week 1)
-    const exercisesArray = Array.from(exerciseMap.values());
+          if (hasLiftId && !looksLikeAssistance && firstSet.liftId) {
+            const profile = profileByLift.get(firstSet.liftId);
+            if (!profile) {
+              continue;
+            }
 
-    // Create 4 sessions for week 1
-    for (let i = 0; i < 4; i++) {
-      const sessionDate = new Date(startDate);
-      sessionDate.setDate(sessionDate.getDate() + i * 2);
-
-      const session = await db.workoutSession.create({
-        data: {
-          userId: user.id,
-          title: `Cycle ${updatedProfiles[0].cycleNumber} Week 1 - Day ${i + 1} - ${sessionDate.toLocaleDateString()}`,
-          startedAt: sessionDate,
-        },
-      });
-
-      sessions.push(session);
-
-      // For each exercise, create sets
-      for (const ex of exercisesArray) {
-        if (ex.method === "531" && ex.liftId && ex.oneRm) {
-          // Generate 531 sets for week 1 with new 1RM
-          const tm = tmForCycle(ex.oneRm, ex.liftId, ex.unit, updatedProfiles[0].cycleNumber);
-          const plan = generate531Session({
-            tm,
-            weekNumber: 1 as const,
-            unit: ex.unit,
-          });
-
-          // Create main sets
-          for (const mainSet of plan) {
-            const plateCalc = calculatePlateLoadPerSide(
-              {
-                targetWeight: Number(mainSet.weight),
-                barbellWeight: 20,
-                unit: ex.unit,
-              }
+            const profileOneRm = Number(profile.oneRm.toString());
+            const tm = tmForCycle(
+              profileOneRm,
+              firstSet.liftId,
+              firstSet.unit,
+              profile.cycleNumber,
             );
 
-            const set = await db.exerciseSet.create({
+            const plan = generate531Session({
+              tm,
+              weekNumber: cycleWeek,
+              unit: firstSet.unit,
+            });
+
+            for (const mainSet of plan) {
+              const plateCalc = calculatePlateLoadPerSide({
+                targetWeight: Number(mainSet.weight),
+                barbellWeight: 20,
+                unit: firstSet.unit,
+              });
+
+              const created = await db.exerciseSet.create({
+                data: {
+                  sessionId: session.id,
+                  exerciseId: firstSet.exerciseId,
+                  liftId: firstSet.liftId,
+                  setNumber: mainSet.setNumber,
+                  repsTarget: mainSet.reps,
+                  targetWeight: Number(mainSet.weight),
+                  percentage: mainSet.percentage,
+                  isAmrap: mainSet.isAmrap,
+                  unit: firstSet.unit,
+                  perSideWeight: Number(plateCalc.roundedPerSide),
+                },
+              });
+
+              createdSets.push(created);
+            }
+
+            continue;
+          }
+
+          for (const templateSet of groupedSets) {
+            const plateCalc = calculatePlateLoadPerSide({
+              targetWeight: templateSet.targetWeight,
+              barbellWeight: 20,
+              unit: templateSet.unit,
+            });
+
+            const created = await db.exerciseSet.create({
               data: {
                 sessionId: session.id,
-                exerciseId: ex.exerciseId,
-                liftId: ex.liftId,
-                setNumber: mainSet.setNumber,
-                repsTarget: mainSet.reps,
-                targetWeight: Number(mainSet.weight),
-                percentage: mainSet.percentage,
-                isAmrap: mainSet.isAmrap,
-                unit: ex.unit,
+                exerciseId: templateSet.exerciseId,
+                liftId: templateSet.liftId,
+                setNumber: templateSet.setNumber,
+                repsTarget: templateSet.repsTarget,
+                targetWeight: templateSet.targetWeight,
+                unit: templateSet.unit,
                 perSideWeight: Number(plateCalc.roundedPerSide),
               },
             });
 
-            createdSets.push(set);
+            createdSets.push(created);
           }
-        } else if (ex.method === "none") {
-          // Clone the same weight and reps
-          const plateCalc = calculatePlateLoadPerSide(
-            {
-              targetWeight: ex.weight,
-              barbellWeight: 20,
-              unit: ex.unit,
-            }
-          );
-
-          const set = await db.exerciseSet.create({
-            data: {
-              sessionId: session.id,
-              exerciseId: ex.exerciseId,
-              setNumber: 1,
-              repsTarget: ex.repsTarget,
-              targetWeight: ex.weight,
-              unit: ex.unit,
-              perSideWeight: Number(plateCalc.roundedPerSide),
-            },
-          });
-
-          createdSets.push(set);
         }
       }
     }

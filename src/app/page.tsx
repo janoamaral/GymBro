@@ -1,4 +1,5 @@
 import { auth0 } from "@/lib/auth0";
+import { getOrCreateCurrentUser } from "@/lib/current-user";
 import MainDashboard from "@/components/main-dashboard";
 
 export default async function Home() {
@@ -37,10 +38,15 @@ export default async function Home() {
     );
   }
 
+  const user = await getOrCreateCurrentUser();
+  const userName = user.displayName ?? user.name ?? session.user.name ?? session.user.email ?? "Athlete";
+  const sessionPicture = typeof session.user.picture === "string" ? session.user.picture : null;
+  const userPicture = user.avatarUrl ?? sessionPicture;
+
   return (
     <MainDashboard
-      userName={session.user.name ?? session.user.email ?? "Athlete"}
-      userPicture={(session.user.picture as string | undefined) ?? null}
+      userName={userName}
+      userPicture={userPicture}
     />
   );
 }

@@ -70,14 +70,14 @@ export default function WorkoutDayPage() {
         sessions.forEach((session) => {
           session.sets.forEach((set: Set) => {
             const key = set.exercise.id;
-            if (!groupMap.has(key)) {
-              groupMap.set(key, {
-                exerciseId: set.exercise.id,
-                exerciseName: set.exercise.name,
-                sets: [],
-              });
-            }
-            groupMap.get(key)!.sets.push(set);
+            const currentGroup = groupMap.get(key) ?? {
+              exerciseId: set.exercise.id,
+              exerciseName: set.exercise.name,
+              sets: [],
+            };
+
+            currentGroup.sets.push(set);
+            groupMap.set(key, currentGroup);
           });
         });
 
@@ -148,6 +148,8 @@ export default function WorkoutDayPage() {
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.back()}
+              title="Volver"
+              aria-label="Volver"
               className="p-2 hover:bg-gray-800 rounded transition-colors"
             >
               <ArrowLeft size={24} className="text-white" />
@@ -190,7 +192,7 @@ export default function WorkoutDayPage() {
                 {exerciseGroup.exerciseName}
               </h3>
               <p className="mt-2 text-gray-400">
-                {exerciseGroup.sets.length} set{exerciseGroup.sets.length !== 1 ? 's' : ''}
+                {exerciseGroup.sets.length} set{exerciseGroup.sets.length > 1 ? 's' : ''}
               </p>
             </button>
           ))}
@@ -198,7 +200,11 @@ export default function WorkoutDayPage() {
 
         {exercises.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-400">No exercises for this day</p>
+            <p className="text-gray-400">
+              {sessionIds.length > 0
+                ? 'Este workout no tiene ejercicios cargados'
+                : 'No exercises for this day'}
+            </p>
           </div>
         )}
       </div>

@@ -12,6 +12,7 @@ export async function getOrCreateCurrentUser() {
   const auth0Id = session.user.sub;
   const email = session.user.email ?? `${auth0Id}@auth0.local`;
   const name = session.user.name ?? "GymBro User";
+  const picture = (session.user.picture as string | undefined) ?? null;
 
   return db.user.upsert({
     where: { auth0Id },
@@ -23,6 +24,7 @@ export async function getOrCreateCurrentUser() {
       auth0Id,
       email,
       name,
+      avatarUrl: picture,
     },
   });
 }
