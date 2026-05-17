@@ -3,11 +3,15 @@ import { z } from "zod";
 import { calculatePlateLoadPerSide } from "@/lib/training/plate-calculator";
 import { db } from "@/lib/db";
 import { getOrCreateCurrentUser } from "@/lib/current-user";
+import { UnauthorizedError } from "@/lib/http-errors";
 
 const createSetSchema = z.object({
+  liftId: z.enum(["SQ", "DL", "BP", "OHP"]).optional(),
   exerciseId: z.string().optional(),
   exerciseName: z.string().min(1).max(120).optional(),
   repsTarget: z.number().int().min(1).max(100),
+  percentage: z.number().min(0).max(1).optional(),
+  isAmrap: z.boolean().optional(),
   targetWeight: z.number().positive(),
   barbellWeight: z.number().positive(),
   unit: z.enum(["kg", "lb"]),
@@ -63,8 +67,11 @@ export async function POST(
       data: {
         sessionId,
         exerciseId,
+        liftId: payload.liftId,
         setNumber: existingSetsCount + 1,
         repsTarget: payload.repsTarget,
+        percentage: payload.percentage,
+        isAmrap: payload.isAmrap ?? false,
         targetWeight: payload.targetWeight,
         barbellWeight: payload.barbellWeight,
         perSideWeight: plateCalc.roundedPerSide,
@@ -77,6 +84,10 @@ export async function POST(
 
     return NextResponse.json({ set }, { status: 201 });
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "INVALID_PAYLOAD", issues: error.issues }, { status: 400 });
     }
