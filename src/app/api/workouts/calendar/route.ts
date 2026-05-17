@@ -3,6 +3,23 @@ import { db } from "@/lib/db";
 import { getOrCreateCurrentUser } from "@/lib/current-user";
 import { UnauthorizedError } from "@/lib/http-errors";
 
+function parseIsoDateParts(value: string): { year: number; month: number; day: number } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  return { year, month, day };
+}
+
 export async function GET(request: Request) {
   try {
     const user = await getOrCreateCurrentUser();
@@ -14,12 +31,15 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "MISSING_DATE_RANGE" }, { status: 400 });
     }
 
-    const fromDate = new Date(from);
-    const toDate = new Date(to);
+    const fromParts = parseIsoDateParts(from);
+    const toParts = parseIsoDateParts(to);
 
-    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+    if (!fromParts || !toParts) {
       return NextResponse.json({ error: "INVALID_DATE_FORMAT" }, { status: 400 });
     }
+
+    const fromDate = new Date(Date.UTC(fromParts.year, fromParts.month - 1, fromParts.day, 0, 0, 0, 0));
+    const toDate = new Date(Date.UTC(toParts.year, toParts.month - 1, toParts.day, 23, 59, 59, 999));
 
     // Get all sessions in the date range for this user
     const sessions = await db.workoutSession.findMany({

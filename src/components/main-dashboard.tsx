@@ -30,8 +30,9 @@ export default function MainDashboard({
     // Fetch calendar data for current month
     const fetchCalendarData = async () => {
       try {
-        const from = new Date(year, month, 1).toISOString().split('T')[0];
-        const to = new Date(year, month + 1, 0).toISOString().split('T')[0];
+        const from = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+        const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+        const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`;
 
         const res = await fetch(`/api/workouts/calendar?from=${from}&to=${to}`);
         const data = await res.json();

@@ -31,6 +31,19 @@ export default function ExerciseDetailPage() {
   const date = params.date as string;
   const exerciseId = params.exerciseId as string;
 
+  const [yearPart, monthPart, dayPart] = date.split('-').map(Number);
+  const hasValidDateParts =
+    Number.isInteger(yearPart) &&
+    Number.isInteger(monthPart) &&
+    Number.isInteger(dayPart) &&
+    monthPart >= 1 &&
+    monthPart <= 12 &&
+    dayPart >= 1 &&
+    dayPart <= 31;
+  const displayDate = hasValidDateParts
+    ? new Date(Date.UTC(yearPart, monthPart - 1, dayPart))
+    : null;
+
   const [sets, setSets] = useState<Set[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -188,12 +201,15 @@ export default function ExerciseDetailPage() {
           <div>
             <h1 className="text-4xl font-bold text-white">{exerciseName}</h1>
             <p className="text-gray-400">
-              {new Date(date).toLocaleDateString('es-ES', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
+              {displayDate
+                ? displayDate.toLocaleDateString('es-ES', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    timeZone: 'UTC',
+                  })
+                : date}
             </p>
             {exerciseOneRm !== null && oneRmUnit && (
               <p className="text-sm text-gray-300 mt-1">

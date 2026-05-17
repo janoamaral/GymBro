@@ -3,6 +3,23 @@ import { db } from "@/lib/db";
 import { getOrCreateCurrentUser } from "@/lib/current-user";
 import { UnauthorizedError } from "@/lib/http-errors";
 
+function parseIsoDateParts(value: string): { year: number; month: number; day: number } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  return { year, month, day };
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ date: string }> },
@@ -11,17 +28,14 @@ export async function GET(
     const user = await getOrCreateCurrentUser();
     const { date } = await context.params;
 
-    // Parse date in format YYYY-MM-DD
-    const targetDate = new Date(date);
-    if (isNaN(targetDate.getTime())) {
+    const dateParts = parseIsoDateParts(date);
+    if (!dateParts) {
       return NextResponse.json({ error: "INVALID_DATE_FORMAT" }, { status: 400 });
     }
 
-    // Get start and end of day in UTC
-    const dayStart = new Date(targetDate);
-    dayStart.setUTCHours(0, 0, 0, 0);
-    const dayEnd = new Date(targetDate);
-    dayEnd.setUTCHours(23, 59, 59, 999);
+    // Query the exact UTC calendar day represented by YYYY-MM-DD.
+    const dayStart = new Date(Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day, 0, 0, 0, 0));
+    const dayEnd = new Date(Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day, 23, 59, 59, 999));
 
     const sessions = await db.workoutSession.findMany({
       where: {
