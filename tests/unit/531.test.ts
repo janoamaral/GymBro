@@ -41,9 +41,13 @@ test("plan531Week builds week 1 with AMRAP on set 3", () => {
 });
 
 test("roundToGranularity can round up/down/nearest", () => {
-  assert.equal(roundToGranularity(83.1, "kg", "nearest"), 82.5);
-  assert.equal(roundToGranularity(83.1, "kg", "up"), 85);
-  assert.equal(roundToGranularity(83.1, "kg", "down"), 82.5);
+  assert.equal(roundToGranularity(83.1, "kg", "nearest"), 83);
+  assert.equal(roundToGranularity(83.1, "kg", "up"), 84);
+  assert.equal(roundToGranularity(83.1, "kg", "down"), 83);
+
+  assert.equal(roundToGranularity(182.6, "lb", "nearest"), 183);
+  assert.equal(roundToGranularity(182.6, "lb", "up"), 183);
+  assert.equal(roundToGranularity(182.6, "lb", "down"), 182);
 });
 
 test("e1rm and amrap logging follows expected status", () => {

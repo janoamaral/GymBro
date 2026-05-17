@@ -53,7 +53,7 @@ export const WEEK_MATRIX: Record<WeekNumber, WeekDefinition> = {
 };
 
 export function granularityForUnit(unit: WeightUnit): number {
-  return unit === "kg" ? 2.5 : 5;
+  return unit === "kg" ? 1 : 1;
 }
 
 function tmIncrementForLift(liftId: LiftId, unit: WeightUnit): number {

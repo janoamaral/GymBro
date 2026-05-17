@@ -1,5 +1,8 @@
 import { roundTo, type WeightUnit } from "@/lib/units/conversion";
 
+export const STANDARD_PLATES_KG = [25, 20, 15, 10, 5, 2.5, 1.25] as const;
+export const STANDARD_PLATES_LB = [45, 35, 25, 10, 5, 2.5, 1.25] as const;
+
 export type BarbellCalculationInput = {
   targetWeight: number;
   barbellWeight: number;
@@ -16,7 +19,17 @@ export type BarbellCalculationResult = {
 };
 
 function granularityForUnit(unit: WeightUnit): number {
-  return unit === "kg" ? 2.5 : 5;
+  return standardTotalStepForUnit(unit);
+}
+
+export function standardPlatesForUnit(unit: WeightUnit): number[] {
+  return (unit === "kg" ? [...STANDARD_PLATES_KG] : [...STANDARD_PLATES_LB]).sort((a, b) => b - a);
+}
+
+export function standardTotalStepForUnit(unit: WeightUnit): number {
+  const plates = standardPlatesForUnit(unit);
+  const smallestPlate = plates[plates.length - 1];
+  return roundTo(smallestPlate * 2, 2);
 }
 
 function roundByMode(value: number, step: number, mode: "up" | "nearest" | "down"): number {
@@ -69,10 +82,7 @@ export function suggestPlatesPerSide(
   unit: WeightUnit,
   availablePlates?: number[],
 ): number[] {
-  const defaults =
-    unit === "kg" ? [25, 20, 15, 10, 5, 2.5, 1.25] : [55, 45, 35, 25, 10, 5, 2.5];
-
-  const plates = (availablePlates ?? defaults).slice().sort((a, b) => b - a);
+  const plates = (availablePlates ?? standardPlatesForUnit(unit)).slice().sort((a, b) => b - a);
   const result: number[] = [];
   let remaining = perSideWeight;
 
