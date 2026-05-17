@@ -1,5 +1,5 @@
 import { auth0 } from "@/lib/auth0";
-import AppDashboard from "@/components/app-dashboard";
+import MainDashboard from "@/components/main-dashboard";
 
 export default async function Home() {
   const session = await auth0.getSession();
@@ -38,7 +38,7 @@ export default async function Home() {
   }
 
   return (
-    <AppDashboard
+    <MainDashboard
       userName={session.user.name ?? session.user.email ?? "Athlete"}
       userPicture={(session.user.picture as string | undefined) ?? null}
     />

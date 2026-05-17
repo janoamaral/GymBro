@@ -9,6 +9,8 @@ const updateSetSchema = z.object({
   repsDone: z.number().int().min(1).max(100).nullable().optional(),
   repsTarget: z.number().int().min(1).max(100).optional(),
   logAsAmrap: z.boolean().optional(),
+  isDone: z.boolean().optional(),
+  setFeelingScore: z.number().int().min(1).max(5).nullable().optional(),
 });
 
 export async function PATCH(
@@ -55,6 +57,8 @@ export async function PATCH(
         e1rm: amrapResult?.e1rm,
         amrapStatus: amrapResult?.status,
         amrapLoggedAt: amrapResult ? new Date() : undefined,
+        isDone: payload.isDone,
+        setFeelingScore: payload.setFeelingScore,
       },
       include: {
         exercise: true,

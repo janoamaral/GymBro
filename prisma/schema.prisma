@@ -30,20 +30,21 @@ enum LiftId {
 }
 
 model User {
-  id                 String           @id @default(cuid())
-  auth0Id            String           @unique
-  email              String           @unique
-  name               String?
-  role               UserRole         @default(USER)
-  defaultUnit        WeightUnit       @default(kg)
-  defaultBarbellKg   Decimal          @default(20)
-  defaultBarbellLb   Decimal          @default(45)
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  workoutSessions    WorkoutSession[]
-  exercises          Exercise[]
-  activityLogs       UserActivityLog[]
-  training531Profiles Training531Profile[]
+  id                    String           @id @default(cuid())
+  auth0Id               String           @unique
+  email                 String           @unique
+  name                  String?
+  role                  UserRole         @default(USER)
+  defaultUnit           WeightUnit       @default(kg)
+  defaultBarbellKg      Decimal          @default(20)
+  defaultBarbellLb      Decimal          @default(45)
+  cycleIncrement531     Float            @default(5.0)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  workoutSessions       WorkoutSession[]
+  exercises             Exercise[]
+  activityLogs          UserActivityLog[]
+  training531Profiles   Training531Profile[]
 }
 
 model Exercise {
@@ -90,6 +91,8 @@ model ExerciseSet {
   amrapStatus        String?
   amrapLoggedAt      DateTime?
   unit               WeightUnit
+  isDone             Boolean        @default(false)
+  setFeelingScore    Int?
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   session            WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
