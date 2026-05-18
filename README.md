@@ -40,3 +40,15 @@ pnpm test:unit
 pnpm prisma:studio
 pnpm prisma:migrate:dev --name init
 ```
+
+## Vercel database env vars
+
+To avoid Prisma authentication errors (`P1000`) in production, ensure one valid Postgres URL is set.
+
+- Preferred: `DATABASE_URL`
+- Supported fallbacks (auto-detected by the app): `POSTGRES_URL`, `DATABASE_URL_UNPOOLED`, `POSTGRES_URL_NON_POOLING`
+
+Notes:
+- The URL must start with `postgresql://` or `postgres://`.
+- Do not use `prisma://` with `@prisma/adapter-pg`.
+- Do not deploy placeholder values like `username:password@host/database`.
