@@ -52,3 +52,4 @@ Notes:
 - The URL must start with `postgresql://` or `postgres://`.
 - Do not use `prisma://` with `@prisma/adapter-pg`.
 - Do not deploy placeholder values like `username:password@host/database`.
+- The production build runs `prisma migrate deploy` before `next build`, so set `DATABASE_URL_UNPOOLED` or `POSTGRES_URL_NON_POOLING` when your provider requires a direct connection for migrations.
