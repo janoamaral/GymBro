@@ -3,17 +3,77 @@ import { db } from "@/lib/db";
 import { getOrCreateCurrentUser } from "@/lib/current-user";
 import { UnauthorizedError } from "@/lib/http-errors";
 
-export async function GET() {
+function parseIsoDateParts(value: string): { year: number; month: number; day: number } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  return { year, month, day };
+}
+
+export async function GET(request: Request) {
   try {
     const user = await getOrCreateCurrentUser();
-    const now = new Date();
+    const { searchParams } = new URL(request.url);
+    const localDate = searchParams.get("localDate");
 
-    // Get the next upcoming session (not finished, startedAt >= now)
+    const fallbackNow = new Date();
+    const fallbackDate = {
+      year: fallbackNow.getUTCFullYear(),
+      month: fallbackNow.getUTCMonth() + 1,
+      day: fallbackNow.getUTCDate(),
+    };
+
+    const dateParts = localDate ? parseIsoDateParts(localDate) : fallbackDate;
+
+    if (!dateParts) {
+      return NextResponse.json({ error: "INVALID_DATE_FORMAT" }, { status: 400 });
+    }
+
+    const dayStart = new Date(Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day, 0, 0, 0, 0));
+    const dayEnd = new Date(Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day, 23, 59, 59, 999));
+
+    // Prefer today's unfinished workout in the user's local calendar day.
+    const todaysSession = await db.workoutSession.findFirst({
+      where: {
+        userId: user.id,
+        startedAt: {
+          gte: dayStart,
+          lte: dayEnd,
+        },
+        finishedAt: null,
+      },
+      orderBy: {
+        startedAt: "asc",
+      },
+      include: {
+        sets: {
+          orderBy: { setNumber: "asc" },
+          include: {
+            exercise: true,
+          },
+        },
+      },
+    });
+
+    if (todaysSession) {
+      return NextResponse.json({ session: todaysSession });
+    }
+
     const session = await db.workoutSession.findFirst({
       where: {
         userId: user.id,
         startedAt: {
-          gte: now,
+          gt: dayEnd,
         },
         finishedAt: null,
       },

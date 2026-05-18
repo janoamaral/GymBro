@@ -22,6 +22,13 @@ interface Session {
   sets: Set[];
 }
 
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function NextWorkout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,7 +36,8 @@ export function NextWorkout() {
   useEffect(() => {
     const fetchNextWorkout = async () => {
       try {
-        const res = await fetch('/api/workouts/next');
+        const localDate = formatLocalDate(new Date());
+        const res = await fetch(`/api/workouts/next?localDate=${localDate}`);
         const data = await res.json();
         setSession(data.session);
       } catch (error) {
