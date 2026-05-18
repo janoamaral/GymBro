@@ -29,6 +29,26 @@ interface SessionWithSets {
 }
 
 const WORKOUT_CACHE_KEY = 'workout-by-date-cache';
+
+const getCachedExerciseSets = (date: string, exerciseId: string): Set[] => {
+  if (globalThis.window === undefined) {
+    return [];
+  }
+
+  try {
+    const cacheRaw = localStorage.getItem(WORKOUT_CACHE_KEY);
+    if (!cacheRaw) {
+      return [];
+    }
+
+    const cache = JSON.parse(cacheRaw) as Record<string, SessionWithSets[]>;
+    const sessions = cache[date] ?? [];
+    return extractExerciseSets(sessions, exerciseId);
+  } catch {
+    return [];
+  }
+};
+
 const extractExerciseSets = (sessions: SessionWithSets[], exerciseId: string): Set[] =>
   sessions
     .flatMap((session) => session.sets)
@@ -53,8 +73,8 @@ export default function ExerciseDetailPage() {
     ? new Date(Date.UTC(yearPart, monthPart - 1, dayPart))
     : null;
 
-  const [sets, setSets] = useState<Set[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [sets, setSets] = useState<Set[]>(() => getCachedExerciseSets(date, exerciseId));
+  const [loading, setLoading] = useState(() => getCachedExerciseSets(date, exerciseId).length === 0);
   const [error, setError] = useState('');
   const [showCalculator, setShowCalculator] = useState(false);
   const [calculatorWeight, setCalculatorWeight] = useState(0);
@@ -63,7 +83,9 @@ export default function ExerciseDetailPage() {
   const [exerciseLiftId, setExerciseLiftId] = useState<'SQ' | 'DL' | 'BP' | 'OHP' | null>(null);
   const [oneRmUnit, setOneRmUnit] = useState<'kg' | 'lb' | null>(null);
   const [isTitleEntering, setIsTitleEntering] = useState(false);
+  const [isMetaEntering, setIsMetaEntering] = useState(false);
   const [entryTitle, setEntryTitle] = useState<string | null>(null);
+  const [entrySetCountText, setEntrySetCountText] = useState<string | null>(null);
 
   const clearExerciseProfile = () => {
     setExerciseOneRm(null);
@@ -92,35 +114,41 @@ export default function ExerciseDetailPage() {
   };
 
   useEffect(() => {
-    setLoading(true);
     setError('');
-    let hydrated = false;
-    try {
-      const cacheRaw = localStorage.getItem(WORKOUT_CACHE_KEY);
-      if (cacheRaw) {
-        const cache = JSON.parse(cacheRaw);
-        if (cache[date]) {
-          const filteredSets = extractExerciseSets(cache[date] as SessionWithSets[], exerciseId);
-          setSets(filteredSets);
-          hydrated = true;
-          // Pre-carga info de perfil si hay sets
-          const firstSet = filteredSets[0];
-          if (firstSet) {
-            setCalculatorUnit(firstSet.unit as 'kg' | 'lb');
-            const firstLiftId = firstSet.liftId;
-            setExerciseLiftId(firstLiftId);
-            if (firstLiftId) {
-              loadExerciseProfile(firstLiftId);
-            } else {
-              clearExerciseProfile();
-            }
-          } else {
-            setExerciseLiftId(null);
-            clearExerciseProfile();
-          }
-        }
+
+    const cachedSets = getCachedExerciseSets(date, exerciseId);
+    const hasCachedSets = cachedSets.length > 0;
+
+    if (hasCachedSets) {
+      setSets(cachedSets);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
+    const hydrateProfileFromSets = (sourceSets: Set[]) => {
+      const firstSet = sourceSets[0];
+      if (!firstSet) {
+        setExerciseLiftId(null);
+        clearExerciseProfile();
+        return;
       }
-    } catch {}
+
+      setCalculatorUnit(firstSet.unit as 'kg' | 'lb');
+      const firstLiftId = firstSet.liftId;
+      setExerciseLiftId(firstLiftId);
+
+      if (!firstLiftId) {
+        clearExerciseProfile();
+        return;
+      }
+
+      loadExerciseProfile(firstLiftId);
+    };
+
+    if (hasCachedSets) {
+      hydrateProfileFromSets(cachedSets);
+    }
 
     // Fetch en background y actualiza si hay cambios
     const fetchExerciseSets = async () => {
@@ -141,21 +169,7 @@ export default function ExerciseDetailPage() {
           localStorage.setItem(WORKOUT_CACHE_KEY, JSON.stringify(cache));
         } catch {}
 
-        // Pre-carga info de perfil si hay sets
-        const firstSet = filteredSets[0];
-        if (firstSet) {
-          setCalculatorUnit(firstSet.unit as 'kg' | 'lb');
-          const firstLiftId = firstSet.liftId;
-          setExerciseLiftId(firstLiftId);
-          if (firstLiftId) {
-            await loadExerciseProfile(firstLiftId);
-          } else {
-            clearExerciseProfile();
-          }
-        } else {
-          setExerciseLiftId(null);
-          clearExerciseProfile();
-        }
+        hydrateProfileFromSets(filteredSets);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
@@ -164,7 +178,6 @@ export default function ExerciseDetailPage() {
     };
 
     fetchExerciseSets();
-    if (hydrated) setLoading(false);
   }, [date, exerciseId]);
 
   useEffect(() => {
@@ -175,6 +188,8 @@ export default function ExerciseDetailPage() {
     try {
       const rawTransitionData = sessionStorage.getItem(SHARED_EXERCISE_TITLE_KEY);
       if (!rawTransitionData) {
+        setIsTitleEntering(false);
+        setIsMetaEntering(false);
         return;
       }
 
@@ -183,6 +198,7 @@ export default function ExerciseDetailPage() {
         date: string;
         exerciseId: string;
         title: string;
+        setCountText?: string;
       };
 
       if (transitionData.date !== date || transitionData.exerciseId !== exerciseId) {
@@ -190,15 +206,24 @@ export default function ExerciseDetailPage() {
       }
 
       setEntryTitle(transitionData.title);
+      setEntrySetCountText(transitionData.setCountText ?? null);
       setIsTitleEntering(true);
+      setIsMetaEntering(true);
 
-      const rafId = requestAnimationFrame(() => {
+      const timeoutId = globalThis.window.setTimeout(() => {
         setIsTitleEntering(false);
-      });
+        setIsMetaEntering(false);
+      }, 260);
 
-      return () => cancelAnimationFrame(rafId);
+      return () => {
+        globalThis.window.clearTimeout(timeoutId);
+        setIsTitleEntering(false);
+        setIsMetaEntering(false);
+      };
     } catch {
       // Ignora errores de parseo para no romper la navegacion.
+      setIsTitleEntering(false);
+      setIsMetaEntering(false);
     }
   }, [loading, date, exerciseId]);
 
@@ -261,6 +286,8 @@ export default function ExerciseDetailPage() {
   };
 
   const exerciseName = sets.length > 0 ? sets[0].exercise.name : entryTitle ?? 'Exercise';
+  const setCountText = `${sets.length} set${sets.length > 1 ? 's' : ''}`;
+  const headerSetCountText = entrySetCountText ?? setCountText;
 
 
   if (loading) {
@@ -278,8 +305,8 @@ export default function ExerciseDetailPage() {
             </div>
           </div>
           <div className="flex flex-col gap-6">
-            {Array.from({ length: skeletonCount }).map((_, idx) => (
-              <div key={idx} className="panel-soft p-6 min-h-30 flex flex-col gap-4">
+            {Array.from({ length: skeletonCount }, (_, n) => `skeleton-${n + 1}`).map((skeletonId) => (
+              <div key={skeletonId} className="panel-soft p-6 min-h-30 flex flex-col gap-4">
                 <Skeleton className="h-6 w-24 mb-2" />
                 <Skeleton className="h-8 w-32 mb-2" />
                 <Skeleton className="h-4 w-full mb-2" />
@@ -322,6 +349,11 @@ export default function ExerciseDetailPage() {
             >
               {exerciseName}
             </h1>
+            <p
+              className={`mt-1 text-xs font-heading uppercase tracking-[0.2em] text-gray-300 transition-all duration-300 ease-out ${isMetaEntering ? 'translate-y-8 scale-95 opacity-40' : 'translate-y-0 scale-100 opacity-100'}`}
+            >
+              {headerSetCountText}
+            </p>
             <p className="text-lg text-gray-400 font-heading uppercase tracking-wider">
               {displayDate
                 ? displayDate.toLocaleDateString('es-ES', {

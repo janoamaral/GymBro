@@ -167,7 +167,7 @@ export default function WorkoutDayPage() {
 
     const timeout = setTimeout(() => {
       router.push(targetRoute);
-    }, 220);
+    }, 140);
 
     return () => clearTimeout(timeout);
   }, [transitioning, targetRoute, router]);
@@ -279,6 +279,7 @@ export default function WorkoutDayPage() {
     event: MouseEvent<HTMLButtonElement>,
     exerciseGroup: ExerciseGroup
   ) => {
+    const setCountText = `${exerciseGroup.sets.length} set${exerciseGroup.sets.length > 1 ? 's' : ''}`;
     try {
       sessionStorage.setItem(
         SHARED_EXERCISE_TITLE_KEY,
@@ -286,6 +287,7 @@ export default function WorkoutDayPage() {
           date,
           exerciseId: exerciseGroup.exerciseId,
           title: exerciseGroup.exerciseName,
+          setCountText,
         })
       );
     } catch {
@@ -311,7 +313,7 @@ export default function WorkoutDayPage() {
   }
 
   return (
-    <main className={`app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8 transition-opacity duration-200 ${transitioning ? 'opacity-0' : 'opacity-100'}`}>
+    <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-md mx-auto">
         {/* Header tipo portada */}
         <div className="mb-10 flex items-center gap-4">
@@ -394,7 +396,9 @@ export default function WorkoutDayPage() {
                   <span className={isNext ? 'text-xs font-heading uppercase tracking-widest opacity-70' : 'text-xs font-heading uppercase tracking-widest text-gray-400'}>
                     Ejercicio
                   </span>
-                  <span className={isNext ? 'text-xs font-bold text-[#101010]' : 'text-xs text-gray-400'}>
+                  <span
+                    className={`${isNext ? 'text-xs font-bold text-[#101010]' : 'text-xs text-gray-400'} transition-all duration-250 ease-out ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-3 scale-105 opacity-80' : ''}`}
+                  >
                     {exerciseGroup.sets.length} set{exerciseGroup.sets.length > 1 ? 's' : ''}
                   </span>
                 </div>
