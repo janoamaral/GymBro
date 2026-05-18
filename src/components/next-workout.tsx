@@ -112,7 +112,7 @@ export function NextWorkout() {
         {Object.entries(exerciseGroups).map(([name, sets]) => (
           <div key={name} className="rounded-xl border border-white/10 bg-[#10151b] px-3 py-3">
             <div className="flex items-start justify-between gap-3">
-              <p className="text-sm font-semibold text-white">{name}</p>
+              <p className="text-lg font-bold text-white">{name}</p>
               <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-gray-300">
                 {sets.length} set{sets.length > 1 ? 's' : ''}
               </span>

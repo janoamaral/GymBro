@@ -342,27 +342,29 @@ export default function WorkoutDayPage() {
             </h1>
           </div>
 
-          {/* Botón reprogramar solo icono */}
-          <button
-            onClick={() => setShowRescheduleModal(true)}
-            disabled={sessionIds.length === 0 || rescheduling}
-            className="btn-dark p-2 ml-auto"
-            title="Reprogramar día"
-            aria-label="Reprogramar día"
-          >
-            <CalendarDays size={22} className="text-sky-300" />
-          </button>
+          <div className="ml-auto flex items-center gap-3">
+            {/* Botón reprogramar solo icono */}
+            <button
+              onClick={() => setShowRescheduleModal(true)}
+              disabled={sessionIds.length === 0 || rescheduling}
+              className="btn-dark p-2"
+              title="Reprogramar día"
+              aria-label="Reprogramar día"
+            >
+              <CalendarDays size={22} className="text-sky-300" />
+            </button>
 
-          {/* Botón eliminar solo icono */}
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            disabled={sessionIds.length === 0 || deleting}
-            className="btn-dark p-2"
-            title="Eliminar workout"
-            aria-label="Eliminar workout"
-          >
-            <Trash2 size={22} className="text-red-400" />
-          </button>
+            {/* Botón eliminar solo icono */}
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={sessionIds.length === 0 || deleting}
+              className="btn-dark p-2"
+              title="Eliminar workout"
+              aria-label="Eliminar workout"
+            >
+              <Trash2 size={22} className="text-red-400" />
+            </button>
+          </div>
         </div>
 
         {rescheduledSources.length > 0 && (
@@ -392,17 +394,6 @@ export default function WorkoutDayPage() {
                 onClick={(event) => handleExerciseOpen(event, exerciseGroup)}
                 className={`${baseCardClass} ${selectedCardClass}`}
               >
-                <p className={isNext ? 'mb-1 text-[11px] font-heading uppercase tracking-widest opacity-70' : 'mb-1 text-[11px] font-heading uppercase tracking-widest text-gray-400'}>
-                  {displayDate
-                    ? displayDate.toLocaleDateString('es-ES', {
-                        weekday: 'short',
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        timeZone: 'UTC',
-                      })
-                    : date}
-                </p>
                 <div className="mb-1 flex items-center justify-between gap-3">
                   <span className={isNext ? 'text-xs font-heading uppercase tracking-widest opacity-70' : 'text-xs font-heading uppercase tracking-widest text-gray-400'}>
                     Ejercicio
@@ -415,7 +406,7 @@ export default function WorkoutDayPage() {
                 </div>
                 <span
                   data-exercise-title
-                  className={`${isNext ? 'text-2xl font-black font-heading' : 'text-xl font-bold font-heading'} transition-all duration-200 ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-8 scale-110 opacity-70' : ''}`}
+                  className={`${isNext ? 'text-3xl font-black font-heading' : 'text-2xl font-bold font-heading'} transition-all duration-200 ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-8 scale-110 opacity-70' : ''}`}
                 >
                   {exerciseGroup.exerciseName}
                 </span>

@@ -60,19 +60,6 @@ export default function ExerciseDetailPage() {
   const date = params.date as string;
   const exerciseId = params.exerciseId as string;
 
-  const [yearPart, monthPart, dayPart] = date.split('-').map(Number);
-  const hasValidDateParts =
-    Number.isInteger(yearPart) &&
-    Number.isInteger(monthPart) &&
-    Number.isInteger(dayPart) &&
-    monthPart >= 1 &&
-    monthPart <= 12 &&
-    dayPart >= 1 &&
-    dayPart <= 31;
-  const displayDate = hasValidDateParts
-    ? new Date(Date.UTC(yearPart, monthPart - 1, dayPart))
-    : null;
-
   const [sets, setSets] = useState<Set[]>(() => getCachedExerciseSets(date, exerciseId));
   const [loading, setLoading] = useState(() => getCachedExerciseSets(date, exerciseId).length === 0);
   const [error, setError] = useState('');
@@ -378,17 +365,6 @@ export default function ExerciseDetailPage() {
             <ArrowLeft size={24} className="text-white" />
           </button>
           <div>
-            <p className="text-lg text-gray-400 font-heading uppercase tracking-wider">
-              {displayDate
-                ? displayDate.toLocaleDateString('es-ES', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    timeZone: 'UTC',
-                  })
-                : date}
-            </p>
             <h1
               className={`text-4xl sm:text-5xl font-heading font-black leading-tight text-white drop-shadow-md uppercase transition-all duration-300 ease-out ${isTitleEntering ? 'translate-y-10 scale-90 opacity-50' : 'translate-y-0 scale-100 opacity-100'}`}
             >
@@ -429,7 +405,7 @@ export default function ExerciseDetailPage() {
                     <span className="block text-xs font-heading uppercase tracking-widest opacity-70">
                       Serie {set.setNumber}
                     </span>
-                    <span className={isNext ? 'text-2xl font-black font-heading' : 'text-xl font-bold font-heading'}>
+                    <span className={isNext ? 'text-3xl font-black font-heading' : 'text-2xl font-bold font-heading'}>
                       {set.repsTarget} reps @ {set.targetWeight} {set.unit}
                     </span>
                   </div>

@@ -100,7 +100,7 @@ export function ProgressChart() {
 
   return (
     <div className="panel p-4">
-      <h3 className="text-lg font-semibold text-white mb-4">Progress</h3>
+      <h3 className="mb-4 text-xl font-bold text-white">Progress</h3>
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="#2f3a47" />
