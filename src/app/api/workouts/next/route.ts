@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOrCreateCurrentUser } from "@/lib/current-user";
 import { UnauthorizedError } from "@/lib/http-errors";
+import { getLatestRescheduleInfoBySessionIds } from "@/lib/workout-reschedule";
 
 function parseIsoDateParts(value: string): { year: number; month: number; day: number } | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -65,8 +66,16 @@ export async function GET(request: Request) {
       },
     });
 
+    const withReschedule = async <T extends { id: string }>(session: T): Promise<T & { reschedule: unknown }> => {
+      const latestReschedules = await getLatestRescheduleInfoBySessionIds(user.id, [session.id]);
+      return {
+        ...session,
+        reschedule: latestReschedules.get(session.id) ?? null,
+      };
+    };
+
     if (todaysSession) {
-      return NextResponse.json({ session: todaysSession });
+      return NextResponse.json({ session: await withReschedule(todaysSession) });
     }
 
     const session = await db.workoutSession.findFirst({
@@ -94,7 +103,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ session: null });
     }
 
-    return NextResponse.json({ session });
+    return NextResponse.json({ session: await withReschedule(session) });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return NextResponse.json({ error: error.message }, { status: 401 });

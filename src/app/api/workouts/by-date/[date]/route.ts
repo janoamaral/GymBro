@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getOrCreateCurrentUser } from "@/lib/current-user";
 import { UnauthorizedError } from "@/lib/http-errors";
+import { getLatestRescheduleInfoBySessionIds } from "@/lib/workout-reschedule";
 
 function parseIsoDateParts(value: string): { year: number; month: number; day: number } | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -58,7 +59,15 @@ export async function GET(
       },
     });
 
-    return NextResponse.json({ sessions });
+    const sessionIds = sessions.map((session) => session.id);
+    const latestReschedules = await getLatestRescheduleInfoBySessionIds(user.id, sessionIds);
+
+    const sessionsWithReschedule = sessions.map((session) => ({
+      ...session,
+      reschedule: latestReschedules.get(session.id) ?? null,
+    }));
+
+    return NextResponse.json({ sessions: sessionsWithReschedule });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return NextResponse.json({ error: error.message }, { status: 401 });

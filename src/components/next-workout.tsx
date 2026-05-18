@@ -19,6 +19,12 @@ interface Session {
   id: string;
   title: string;
   startedAt: string;
+  reschedule: {
+    fromLocalDate: string;
+    toLocalDate: string;
+    reason: string | null;
+    movedAt: string;
+  } | null;
   sets: Set[];
 }
 
@@ -27,6 +33,15 @@ function formatLocalDate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function formatIsoDateLabel(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  if (!year || !month || !day) {
+    return isoDate;
+  }
+
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString();
 }
 
 export function NextWorkout() {
@@ -87,6 +102,12 @@ export function NextWorkout() {
         <Clock size={16} />
         <span>{new Date(session.startedAt).toLocaleDateString()}</span>
       </div>
+      {session.reschedule && session.reschedule.fromLocalDate !== session.reschedule.toLocalDate && (
+        <p className="mb-4 rounded-lg border border-sky-400/35 bg-sky-500/10 px-3 py-2 text-xs text-sky-100">
+          Reprogramado desde {formatIsoDateLabel(session.reschedule.fromLocalDate)}
+          {session.reschedule.reason ? ` (${session.reschedule.reason})` : ''}
+        </p>
+      )}
       <div className="space-y-3">
         {Object.entries(exerciseGroups).map(([name, sets]) => (
           <div key={name} className="panel-soft rounded-xl p-3">
