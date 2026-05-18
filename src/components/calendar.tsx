@@ -5,15 +5,30 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 interface CalendarProps {
   readonly year: number;
   readonly month: number; // 0-11
-  readonly workoutDates: string[]; // Array of YYYY-MM-DD strings
+  readonly workoutDays: Array<{ date: string; lifts: string[] }>; // Array of dates with lift IDs
   readonly onDayClick: (date: string) => void;
   readonly onMonthChange: (year: number, month: number) => void;
+}
+
+type LiftMarker = "BP" | "DL" | "SQ" | "OHP";
+
+const LIFT_ORDER: LiftMarker[] = ["BP", "DL", "SQ", "OHP"];
+
+const LIFT_COLOR_CLASS: Record<LiftMarker, string> = {
+  BP: 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.95)]',
+  DL: 'bg-violet-400 shadow-[0_0_10px_rgba(167,139,250,0.95)]',
+  SQ: 'bg-fuchsia-400 shadow-[0_0_10px_rgba(232,121,249,0.95)]',
+  OHP: 'bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.95)]',
+};
+
+function isLiftMarker(value: string): value is LiftMarker {
+  return value === "BP" || value === "DL" || value === "SQ" || value === "OHP";
 }
 
 export function Calendar({
   year,
   month,
-  workoutDates,
+  workoutDays,
   onDayClick,
   onMonthChange,
 }: Readonly<CalendarProps>) {
@@ -35,7 +50,9 @@ export function Calendar({
     days.push({ key: `day-${year}-${month}-${i}`, day: i });
   }
 
-  const workoutDateSet = new Set(workoutDates);
+  const workoutDateMap = new Map(
+    workoutDays.map((item) => [item.date, item.lifts.filter(isLiftMarker)]),
+  );
 
   const handlePrevMonth = () => {
     if (month === 0) {
@@ -100,7 +117,9 @@ export function Calendar({
           }
 
           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const hasWorkout = workoutDateSet.has(dateStr);
+          const liftsForDate = workoutDateMap.get(dateStr) ?? [];
+          const sortedLifts = LIFT_ORDER.filter((lift) => liftsForDate.includes(lift));
+          const hasWorkout = workoutDateMap.has(dateStr);
           const isToday = isCurrentMonth && day === currentDay;
 
           return (
@@ -115,7 +134,24 @@ export function Calendar({
             >
               <span className="text-sm">{day}</span>
               {hasWorkout && (
-                <div className="absolute bottom-1 h-1.5 w-1.5 rounded-full bg-green-400" />
+                <div className="absolute bottom-1 flex items-center gap-1">
+                  {sortedLifts.length > 0 ? (
+                    sortedLifts.map((lift) => (
+                      <div
+                        key={lift}
+                        className={`h-1.5 w-1.5 rounded-full ${LIFT_COLOR_CLASS[lift]}`}
+                        title={lift}
+                        aria-label={lift}
+                      />
+                    ))
+                  ) : (
+                    <div
+                      className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.95)]"
+                      title="Workout"
+                      aria-label="Workout"
+                    />
+                  )}
+                </div>
               )}
             </button>
           );

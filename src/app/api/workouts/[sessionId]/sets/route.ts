@@ -13,7 +13,7 @@ const createSetSchema = z.object({
   percentage: z.number().min(0).max(1).optional(),
   isAmrap: z.boolean().optional(),
   targetWeight: z.number().positive(),
-  barbellWeight: z.number().positive(),
+  barbellWeight: z.number().positive().optional(),
   unit: z.enum(["kg", "lb"]),
 });
 
@@ -57,11 +57,16 @@ export async function POST(
 
     const existingSetsCount = await db.exerciseSet.count({ where: { sessionId } });
 
-    const plateCalc = calculatePlateLoadPerSide({
-      targetWeight: payload.targetWeight,
-      barbellWeight: payload.barbellWeight,
-      unit: payload.unit,
-    });
+    const shouldCalculatePlateLoad =
+      payload.barbellWeight !== undefined && payload.targetWeight >= payload.barbellWeight;
+
+    const plateCalc = shouldCalculatePlateLoad
+      ? calculatePlateLoadPerSide({
+          targetWeight: payload.targetWeight,
+          barbellWeight: payload.barbellWeight,
+          unit: payload.unit,
+        })
+      : null;
 
     const set = await db.exerciseSet.create({
       data: {
@@ -73,8 +78,8 @@ export async function POST(
         percentage: payload.percentage,
         isAmrap: payload.isAmrap ?? false,
         targetWeight: payload.targetWeight,
-        barbellWeight: payload.barbellWeight,
-        perSideWeight: plateCalc.roundedPerSide,
+        barbellWeight: shouldCalculatePlateLoad ? payload.barbellWeight : null,
+        perSideWeight: plateCalc?.roundedPerSide ?? null,
         unit: payload.unit,
       },
       include: {

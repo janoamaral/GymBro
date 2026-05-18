@@ -125,6 +125,19 @@ export default function AppDashboard({ userName, userPicture }: Props) {
   });
 
   const calculation = useMemo(() => {
+    if (targetWeight > 0 && barbellWeight > 0 && targetWeight < barbellWeight) {
+      return {
+        error: null,
+        result: {
+          perSide: 0,
+          roundedPerSide: 0,
+          totalFromBarAndPlates: targetWeight,
+          differenceFromTarget: 0,
+          unit,
+        },
+      };
+    }
+
     try {
       return {
         error: null,

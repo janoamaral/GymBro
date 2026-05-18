@@ -52,19 +52,34 @@ export async function GET(request: Request) {
       },
       select: {
         startedAt: true,
+        sets: {
+          select: {
+            liftId: true,
+          },
+        },
       },
     });
 
-    // Count sessions per date (YYYY-MM-DD format)
-    const dateMap = new Map<string, number>();
+    // Aggregate sessions and lift markers per date (YYYY-MM-DD format).
+    const dateMap = new Map<string, { count: number; lifts: Set<string> }>();
     sessions.forEach((session) => {
       const dateStr = session.startedAt.toISOString().split("T")[0];
-      dateMap.set(dateStr, (dateMap.get(dateStr) || 0) + 1);
+      const existing = dateMap.get(dateStr) ?? { count: 0, lifts: new Set<string>() };
+
+      existing.count += 1;
+      session.sets.forEach((set) => {
+        if (set.liftId) {
+          existing.lifts.add(set.liftId);
+        }
+      });
+
+      dateMap.set(dateStr, existing);
     });
 
-    const result = Array.from(dateMap.entries()).map(([date, count]) => ({
+    const result = Array.from(dateMap.entries()).map(([date, value]) => ({
       date,
-      count,
+      count: value.count,
+      lifts: Array.from(value.lifts),
     }));
 
     return NextResponse.json({ dates: result });

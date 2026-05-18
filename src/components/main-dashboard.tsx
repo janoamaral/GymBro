@@ -15,6 +15,7 @@ interface MainDashboardProps {
 
 type CalendarDateItem = {
   date: string;
+  lifts: string[];
 };
 
 export default function MainDashboard({
@@ -23,7 +24,7 @@ export default function MainDashboard({
 }: MainDashboardProps) {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [workoutDates, setWorkoutDates] = useState<string[]>([]);
+  const [workoutDays, setWorkoutDays] = useState<CalendarDateItem[]>([]);
   const [showNewCycleModal, setShowNewCycleModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -42,7 +43,7 @@ export default function MainDashboard({
         const data = await res.json();
 
         if (data.dates) {
-          setWorkoutDates((data.dates as CalendarDateItem[]).map((d) => d.date));
+          setWorkoutDays(data.dates as CalendarDateItem[]);
         }
       } catch (error) {
         console.error('Failed to fetch calendar data:', error);
@@ -117,7 +118,7 @@ export default function MainDashboard({
               <Calendar
                 year={year}
                 month={month}
-                workoutDates={workoutDates}
+                workoutDays={workoutDays}
                 onDayClick={handleDayClick}
                 onMonthChange={handleMonthChange}
               />

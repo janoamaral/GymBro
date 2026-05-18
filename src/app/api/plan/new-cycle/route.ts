@@ -6,6 +6,20 @@ import { UnauthorizedError } from "@/lib/http-errors";
 import { generate531Session, tmForCycle } from "@/lib/training/531";
 import { calculatePlateLoadPerSide } from "@/lib/training/plate-calculator";
 
+function safePerSideWeight(targetWeight: number, unit: "kg" | "lb", barbellWeight = 20): number | null {
+  if (targetWeight < barbellWeight) {
+    return null;
+  }
+
+  const plateCalc = calculatePlateLoadPerSide({
+    targetWeight,
+    barbellWeight,
+    unit,
+  });
+
+  return Number(plateCalc.roundedPerSide);
+}
+
 const newCycleSchema = z.object({
   startDate: z.string().refine((date) => !Number.isNaN(new Date(date).getTime()), "Invalid date format"),
 });
@@ -232,11 +246,7 @@ export async function POST(request: Request) {
             });
 
             for (const mainSet of plan) {
-              const plateCalc = calculatePlateLoadPerSide({
-                targetWeight: Number(mainSet.weight),
-                barbellWeight: 20,
-                unit: firstSet.unit,
-              });
+              const perSideWeight = safePerSideWeight(Number(mainSet.weight), firstSet.unit);
 
               const created = await db.exerciseSet.create({
                 data: {
@@ -249,7 +259,7 @@ export async function POST(request: Request) {
                   percentage: mainSet.percentage,
                   isAmrap: mainSet.isAmrap,
                   unit: firstSet.unit,
-                  perSideWeight: Number(plateCalc.roundedPerSide),
+                  perSideWeight,
                 },
               });
 
@@ -260,11 +270,7 @@ export async function POST(request: Request) {
           }
 
           for (const templateSet of groupedSets) {
-            const plateCalc = calculatePlateLoadPerSide({
-              targetWeight: templateSet.targetWeight,
-              barbellWeight: 20,
-              unit: templateSet.unit,
-            });
+            const perSideWeight = safePerSideWeight(templateSet.targetWeight, templateSet.unit);
 
             const created = await db.exerciseSet.create({
               data: {
@@ -275,7 +281,7 @@ export async function POST(request: Request) {
                 repsTarget: templateSet.repsTarget,
                 targetWeight: templateSet.targetWeight,
                 unit: templateSet.unit,
-                perSideWeight: Number(plateCalc.roundedPerSide),
+                perSideWeight,
               },
             });
 

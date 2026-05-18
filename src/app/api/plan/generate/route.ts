@@ -6,6 +6,20 @@ import { UnauthorizedError } from "@/lib/http-errors";
 import { generate531Session, tmForCycle } from "@/lib/training/531";
 import { calculatePlateLoadPerSide } from "@/lib/training/plate-calculator";
 
+function safePerSideWeight(targetWeight: number, unit: "kg" | "lb", barbellWeight = 20): number | null {
+  if (targetWeight < barbellWeight) {
+    return null;
+  }
+
+  const plateCalc = calculatePlateLoadPerSide({
+    targetWeight,
+    barbellWeight,
+    unit,
+  });
+
+  return Number(plateCalc.roundedPerSide);
+}
+
 const setSchema = z.object({
   weight: z.number().positive(),
   reps: z.number().int().positive(),
@@ -137,12 +151,9 @@ export async function POST(request: Request) {
 
           // Create sets for the main lift
           for (const mainSet of plan) {
-            const plateCalc = calculatePlateLoadPerSide(
-              {
-                targetWeight: Number(mainSet.weight),
-                barbellWeight: 20,
-                unit: exercise.unit as "kg" | "lb",
-              }
+            const perSideWeight = safePerSideWeight(
+              Number(mainSet.weight),
+              exercise.unit as "kg" | "lb",
             );
 
             const set = await db.exerciseSet.create({
@@ -156,7 +167,7 @@ export async function POST(request: Request) {
                 percentage: mainSet.percentage,
                 isAmrap: mainSet.isAmrap,
                 unit: exercise.unit as "kg" | "lb",
-                perSideWeight: Number(plateCalc.roundedPerSide),
+                perSideWeight,
               },
             });
 
@@ -170,13 +181,7 @@ export async function POST(request: Request) {
               : [];
 
           for (const [index, customSet] of setsToCreate.entries()) {
-            const plateCalc = calculatePlateLoadPerSide(
-              {
-                targetWeight: customSet.weight,
-                barbellWeight: 20,
-                unit: exercise.unit as "kg" | "lb",
-              }
-            );
+            const perSideWeight = safePerSideWeight(customSet.weight, exercise.unit as "kg" | "lb");
 
             const set = await db.exerciseSet.create({
               data: {
@@ -186,7 +191,7 @@ export async function POST(request: Request) {
                 repsTarget: customSet.reps,
                 targetWeight: customSet.weight,
                 unit: exercise.unit as "kg" | "lb",
-                perSideWeight: Number(plateCalc.roundedPerSide),
+                perSideWeight,
               },
             });
 
