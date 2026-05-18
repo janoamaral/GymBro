@@ -74,7 +74,11 @@ export async function PATCH(
 
     if (hasRescheduleRequest) {
       const requestedDate = payload.rescheduledToLocalDate;
-      const parsedDate = parseIsoDateParts(payload.rescheduledToLocalDate);
+      if (typeof requestedDate !== "string") {
+        return NextResponse.json({ error: "INVALID_DATE_FORMAT" }, { status: 400 });
+      }
+
+      const parsedDate = parseIsoDateParts(requestedDate);
       if (!parsedDate) {
         return NextResponse.json({ error: "INVALID_DATE_FORMAT" }, { status: 400 });
       }
