@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Calculator } from 'lucide-react';
 import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
-import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
 
@@ -28,6 +28,7 @@ interface SessionWithSets {
   sets: Set[];
 }
 
+const WORKOUT_CACHE_KEY = 'workout-by-date-cache';
 const extractExerciseSets = (sessions: SessionWithSets[], exerciseId: string): Set[] =>
   sessions
     .flatMap((session) => session.sets)
@@ -91,6 +92,37 @@ export default function ExerciseDetailPage() {
   };
 
   useEffect(() => {
+    setLoading(true);
+    setError('');
+    let hydrated = false;
+    try {
+      const cacheRaw = localStorage.getItem(WORKOUT_CACHE_KEY);
+      if (cacheRaw) {
+        const cache = JSON.parse(cacheRaw);
+        if (cache[date]) {
+          const filteredSets = extractExerciseSets(cache[date] as SessionWithSets[], exerciseId);
+          setSets(filteredSets);
+          hydrated = true;
+          // Pre-carga info de perfil si hay sets
+          const firstSet = filteredSets[0];
+          if (firstSet) {
+            setCalculatorUnit(firstSet.unit as 'kg' | 'lb');
+            const firstLiftId = firstSet.liftId;
+            setExerciseLiftId(firstLiftId);
+            if (firstLiftId) {
+              loadExerciseProfile(firstLiftId);
+            } else {
+              clearExerciseProfile();
+            }
+          } else {
+            setExerciseLiftId(null);
+            clearExerciseProfile();
+          }
+        }
+      }
+    } catch {}
+
+    // Fetch en background y actualiza si hay cambios
     const fetchExerciseSets = async () => {
       try {
         const res = await fetch(`/api/workouts/by-date/${date}`);
@@ -101,23 +133,29 @@ export default function ExerciseDetailPage() {
 
         setSets(filteredSets);
 
+        // Actualiza cache
+        try {
+          const cacheRaw = localStorage.getItem(WORKOUT_CACHE_KEY);
+          const cache = cacheRaw ? JSON.parse(cacheRaw) : {};
+          cache[date] = data.sessions;
+          localStorage.setItem(WORKOUT_CACHE_KEY, JSON.stringify(cache));
+        } catch {}
+
+        // Pre-carga info de perfil si hay sets
         const firstSet = filteredSets[0];
-        if (!firstSet) {
+        if (firstSet) {
+          setCalculatorUnit(firstSet.unit as 'kg' | 'lb');
+          const firstLiftId = firstSet.liftId;
+          setExerciseLiftId(firstLiftId);
+          if (firstLiftId) {
+            await loadExerciseProfile(firstLiftId);
+          } else {
+            clearExerciseProfile();
+          }
+        } else {
           setExerciseLiftId(null);
           clearExerciseProfile();
-          return;
         }
-
-        setCalculatorUnit(firstSet.unit as 'kg' | 'lb');
-        const firstLiftId = firstSet.liftId;
-        setExerciseLiftId(firstLiftId);
-
-        if (!firstLiftId) {
-          clearExerciseProfile();
-          return;
-        }
-
-        await loadExerciseProfile(firstLiftId);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
@@ -126,6 +164,7 @@ export default function ExerciseDetailPage() {
     };
 
     fetchExerciseSets();
+    if (hydrated) setLoading(false);
   }, [date, exerciseId]);
 
   useEffect(() => {
@@ -223,8 +262,34 @@ export default function ExerciseDetailPage() {
 
   const exerciseName = sets.length > 0 ? sets[0].exercise.name : entryTitle ?? 'Exercise';
 
+
   if (loading) {
-    return <FullscreenLoader label="Cargando ejercicio..." />;
+    // Si no hay sets aún, muestra 3 skeletons por defecto
+    const skeletonCount = sets.length > 0 ? sets.length : 3;
+    return (
+      <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
+        <div className="max-w-md mx-auto">
+          <div className="mb-10 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-neutral-800 animate-pulse" />
+            <div className="flex-1">
+              <Skeleton className="h-10 w-40 mb-2" />
+              <Skeleton className="h-4 w-32 mb-1" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-6">
+            {Array.from({ length: skeletonCount }).map((_, idx) => (
+              <div key={idx} className="panel-soft p-6 min-h-30 flex flex-col gap-4">
+                <Skeleton className="h-6 w-24 mb-2" />
+                <Skeleton className="h-8 w-32 mb-2" />
+                <Skeleton className="h-4 w-full mb-2" />
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </main>
+    );
   }
 
   if (error) {

@@ -83,6 +83,8 @@ const groupSetsByExercise = (sessions: SessionWithSets[]): ExerciseGroup[] => {
 };
 
 
+const WORKOUT_CACHE_KEY = 'workout-by-date-cache';
+
 export default function WorkoutDayPage() {
   const router = useRouter();
   const params = useParams();
@@ -112,16 +114,40 @@ export default function WorkoutDayPage() {
   const [targetRoute, setTargetRoute] = useState<string | null>(null);
   const [transitioningExerciseId, setTransitioningExerciseId] = useState<string | null>(null);
 
+  // Hidrata desde cache localStorage primero
   useEffect(() => {
+    setLoading(true);
+    setError('');
+    let hydrated = false;
+    try {
+      const cacheRaw = localStorage.getItem(WORKOUT_CACHE_KEY);
+      if (cacheRaw) {
+        const cache = JSON.parse(cacheRaw);
+        if (cache[date]) {
+          const fetchedSessions = cache[date] as SessionWithSets[];
+          setSessions(fetchedSessions);
+          setExercises(groupSetsByExercise(fetchedSessions));
+          hydrated = true;
+        }
+      }
+    } catch {}
+
+    // Fetch en background y actualiza si hay cambios
     const fetchSessionsForDay = async () => {
       try {
         const res = await fetch(`/api/workouts/by-date/${date}`);
         if (!res.ok) throw new Error('Failed to fetch sessions');
-
         const data = await res.json();
         const fetchedSessions = data.sessions as SessionWithSets[];
         setSessions(fetchedSessions);
         setExercises(groupSetsByExercise(fetchedSessions));
+        // Actualiza cache
+        try {
+          const cacheRaw = localStorage.getItem(WORKOUT_CACHE_KEY);
+          const cache = cacheRaw ? JSON.parse(cacheRaw) : {};
+          cache[date] = fetchedSessions;
+          localStorage.setItem(WORKOUT_CACHE_KEY, JSON.stringify(cache));
+        } catch {}
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
@@ -130,6 +156,8 @@ export default function WorkoutDayPage() {
     };
 
     fetchSessionsForDay();
+    // Si no se pudo hidratar, loading se apaga tras fetch; si sí, loading se apaga ya
+    if (hydrated) setLoading(false);
   }, [date]);
 
   useEffect(() => {
