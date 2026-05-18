@@ -7,7 +7,7 @@ export default async function Home() {
 
   if (!session) {
     return (
-      <main className="flex min-h-full flex-1 flex-col items-center justify-center px-6 py-16">
+      <main className="flex min-h-screen flex-1 flex-col items-center justify-center px-6 py-16">
         <div className="w-full max-w-sm space-y-8 text-center">
           <div>
             <p className="text-xs tracking-[0.3em] text-muted">GymBro</p>
@@ -15,7 +15,7 @@ export default async function Home() {
               LIFT.<br />TRACK.<br />PROGRESS.
             </h1>
             <p className="mt-4 text-base text-muted">
-              5/3/1 programming, plate calculator and workout logging — all in one place.
+              Programación 5/3/1, calculadora de discos y registro de entrenamientos en un solo lugar.
             </p>
           </div>
 
@@ -24,13 +24,13 @@ export default async function Home() {
               href="/auth/login?screen_hint=signup"
               className="flex h-13 w-full items-center justify-center rounded-2xl bg-accent text-lg font-semibold text-black"
             >
-              Create account
+              Crear cuenta
             </a>
             <a
               href="/auth/login"
               className="flex h-13 w-full items-center justify-center rounded-2xl border border-accent/30 text-lg font-semibold text-foreground hover:border-accent/60"
             >
-              Log in
+              Iniciar sesión
             </a>
           </div>
         </div>

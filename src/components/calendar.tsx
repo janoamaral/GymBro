@@ -121,16 +121,19 @@ export function Calendar({
           const sortedLifts = LIFT_ORDER.filter((lift) => liftsForDate.includes(lift));
           const hasWorkout = workoutDateMap.has(dateStr);
           const isToday = isCurrentMonth && day === currentDay;
+          let dayButtonClass = 'bg-[#11161b] text-gray-500 cursor-default';
+          if (isToday) {
+            dayButtonClass = 'bg-[#d6ff43] text-gray-900 font-bold shadow-[0_0_24px_rgba(214,255,67,0.45)]';
+          } else if (hasWorkout) {
+            dayButtonClass = 'bg-[#12171d] text-white hover:border-[#74c9ff]/45 hover:bg-[#151d25]';
+          }
 
           return (
             <button
               key={key}
-              onClick={() => onDayClick(dateStr)}
-              className={`relative flex aspect-square flex-col items-center justify-center rounded-xl border border-white/10 transition-colors ${
-                isToday
-                  ? 'bg-[#d6ff43] text-gray-900 font-bold shadow-[0_0_24px_rgba(214,255,67,0.45)]'
-                  : 'bg-[#12171d] text-white hover:border-[#74c9ff]/45 hover:bg-[#151d25]'
-              }`}
+              onClick={hasWorkout ? () => onDayClick(dateStr) : undefined}
+              disabled={!hasWorkout}
+              className={`relative flex aspect-square flex-col items-center justify-center rounded-xl border border-white/10 transition-colors ${dayButtonClass}`}
             >
               <span className="text-sm">{day}</span>
               {hasWorkout && (

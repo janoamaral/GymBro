@@ -67,17 +67,17 @@ export function NextWorkout() {
 
   if (loading) {
     return (
-      <div className="panel p-4">
-        <p className="text-gray-400">Loading...</p>
+      <div className="panel p-5">
+        <p className="text-gray-400">Cargando...</p>
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="panel p-4">
-        <h3 className="text-lg font-semibold text-white mb-2">Próximo Workout</h3>
-        <p className="text-gray-400">No upcoming workouts</p>
+      <div className="panel p-5">
+        <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.18em] text-gray-300">Próximo Workout</h3>
+        <p className="text-gray-400">No hay workouts próximos</p>
       </div>
     );
   }
@@ -96,9 +96,9 @@ export function NextWorkout() {
   );
 
   return (
-    <div className="panel p-4">
-      <h3 className="text-lg font-semibold text-white mb-4">Próximo Workout</h3>
-      <div className="flex items-center gap-2 text-gray-400 text-sm mb-4">
+    <div className="panel p-5">
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-gray-300">Próximo Workout</h3>
+      <div className="mb-4 flex items-center gap-2 text-sm text-gray-400">
         <Clock size={16} />
         <span>{new Date(session.startedAt).toLocaleDateString()}</span>
       </div>
@@ -108,14 +108,19 @@ export function NextWorkout() {
           {session.reschedule.reason ? ` (${session.reschedule.reason})` : ''}
         </p>
       )}
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         {Object.entries(exerciseGroups).map(([name, sets]) => (
-          <div key={name} className="panel-soft rounded-xl p-3">
-            <p className="font-semibold text-white mb-2">{name}</p>
-            <div className="space-y-1 text-sm text-gray-300">
+          <div key={name} className="rounded-xl border border-white/10 bg-[#10151b] px-3 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm font-semibold text-white">{name}</p>
+              <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-gray-300">
+                {sets.length} set{sets.length > 1 ? 's' : ''}
+              </span>
+            </div>
+            <div className="mt-2 space-y-1 text-xs text-gray-300">
               {sets.map((set) => (
                 <p key={set.id}>
-                  Set {set.setNumber}: {set.repsTarget} reps @ {set.targetWeight} {set.unit}
+                  Serie {set.setNumber}: {set.repsTarget} reps @ {set.targetWeight} {set.unit}
                 </p>
               ))}
             </div>

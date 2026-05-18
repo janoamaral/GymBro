@@ -72,7 +72,7 @@ export default function MainDashboard({
   const userInitial = userName.trim().charAt(0).toUpperCase();
 
   return (
-    <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
+    <main className="app-canvas min-h-screen px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-start justify-between">
@@ -96,7 +96,7 @@ export default function MainDashboard({
               )}
             </button>
             <div>
-              <p className="text-sm text-gray-300">Hello there!</p>
+              <p className="text-sm text-gray-300">Hola, atleta</p>
               <h1 className="mt-1 text-xl font-bold text-white">{userName}</h1>
             </div>
           </div>
@@ -112,7 +112,7 @@ export default function MainDashboard({
           <div>
             {loading ? (
               <div className="panel flex h-96 items-center justify-center p-4">
-                <p className="text-gray-400">Loading calendar...</p>
+                <p className="text-gray-400">Cargando calendario...</p>
               </div>
             ) : (
               <Calendar

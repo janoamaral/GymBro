@@ -306,29 +306,26 @@ export default function WorkoutDayPage() {
 
   if (error) {
     return (
-      <main className="app-canvas min-h-full px-4 py-8">
+      <main className="app-canvas min-h-screen px-4 py-8">
         <p className="text-red-400">{error}</p>
       </main>
     );
   }
 
   return (
-    <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
+    <main className="app-canvas min-h-screen px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-md mx-auto">
         {/* Header tipo portada */}
-        <div className="mb-10 flex items-center gap-4">
+        <div className="relative mb-10 pl-14">
           <button
             onClick={() => router.back()}
             title="Volver"
             aria-label="Volver"
-            className="btn-dark p-2"
+            className="btn-dark absolute left-0 top-1 h-10 w-10 p-2"
           >
             <ArrowLeft size={24} className="text-white" />
           </button>
           <div>
-            <h1 className="text-4xl sm:text-5xl font-heading font-black leading-tight text-white drop-shadow-md uppercase">
-              Workout
-            </h1>
             <p className="text-lg text-gray-400 font-heading uppercase tracking-wider">
               {displayDate
                 ? displayDate.toLocaleDateString('es-ES', {
@@ -340,6 +337,9 @@ export default function WorkoutDayPage() {
                   })
                 : date}
             </p>
+            <h1 className="text-4xl sm:text-5xl font-heading font-black leading-tight text-white drop-shadow-md uppercase">
+              Workout
+            </h1>
           </div>
 
           {/* Botón reprogramar solo icono */}
@@ -392,7 +392,18 @@ export default function WorkoutDayPage() {
                 onClick={(event) => handleExerciseOpen(event, exerciseGroup)}
                 className={`${baseCardClass} ${selectedCardClass}`}
               >
-                <div className="flex items-center justify-between mb-1">
+                <p className={isNext ? 'mb-1 text-[11px] font-heading uppercase tracking-widest opacity-70' : 'mb-1 text-[11px] font-heading uppercase tracking-widest text-gray-400'}>
+                  {displayDate
+                    ? displayDate.toLocaleDateString('es-ES', {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        timeZone: 'UTC',
+                      })
+                    : date}
+                </p>
+                <div className="mb-1 flex items-center justify-between gap-3">
                   <span className={isNext ? 'text-xs font-heading uppercase tracking-widest opacity-70' : 'text-xs font-heading uppercase tracking-widest text-gray-400'}>
                     Ejercicio
                   </span>
@@ -418,7 +429,7 @@ export default function WorkoutDayPage() {
             <p className="text-gray-400">
               {sessionIds.length > 0
                 ? 'Este workout no tiene ejercicios cargados'
-                : 'No exercises for this day'}
+                : 'No hay ejercicios para este día'}
             </p>
           </div>
         )}

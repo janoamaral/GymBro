@@ -25,6 +25,7 @@ body {
 }
 
 .app-canvas {
+  min-height: 100vh;
   background:
     radial-gradient(circle at 12% 16%, rgba(118, 255, 132, 0.12), transparent 34%),
     radial-gradient(circle at 88% 22%, rgba(119, 176, 255, 0.08), transparent 36%),

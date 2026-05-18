@@ -124,7 +124,7 @@ export default function PlanPage() {
   };
 
   return (
-    <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
+    <main className="app-canvas min-h-screen px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-8">

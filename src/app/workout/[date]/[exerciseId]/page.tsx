@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calculator } from 'lucide-react';
+import { ArrowLeft, Calculator, Dumbbell } from 'lucide-react';
 import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -319,8 +319,8 @@ export default function ExerciseDetailPage() {
     );
   };
 
-  const exerciseName = sets.length > 0 ? sets[0].exercise.name : entryTitle ?? 'Exercise';
-  const setCountText = `${sets.length} set${sets.length > 1 ? 's' : ''}`;
+  const exerciseName = sets.length > 0 ? sets[0].exercise.name : entryTitle ?? 'Ejercicio';
+  const setCountText = `${sets.length} serie${sets.length > 1 ? 's' : ''}`;
   const headerSetCountText = entrySetCountText ?? setCountText;
 
 
@@ -328,7 +328,7 @@ export default function ExerciseDetailPage() {
     // Si no hay sets aún, muestra 3 skeletons por defecto
     const skeletonCount = sets.length > 0 ? sets.length : 3;
     return (
-      <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
+      <main className="app-canvas min-h-screen px-4 py-8 sm:px-6 lg:px-8">
         <div className="max-w-md mx-auto">
           <div className="mb-10 flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-neutral-800 animate-pulse" />
@@ -355,7 +355,7 @@ export default function ExerciseDetailPage() {
 
   if (error) {
     return (
-      <main className="app-canvas min-h-full px-4 py-8">
+      <main className="app-canvas min-h-screen px-4 py-8">
         <p className="text-red-400">{error}</p>
       </main>
     );
@@ -365,29 +365,19 @@ export default function ExerciseDetailPage() {
   const nextSetIndex = sets.findIndex((set) => !set.isDone);
 
   return (
-    <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
+    <main className="app-canvas min-h-screen px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-md mx-auto">
         {/* Header tipo portada */}
-        <div className="mb-10 flex items-center gap-4">
+        <div className="relative mb-10 pl-14">
           <button
             onClick={() => router.back()}
             title="Volver"
             aria-label="Volver"
-            className="btn-dark p-2"
+            className="btn-dark absolute left-0 top-1 h-10 w-10 p-2"
           >
             <ArrowLeft size={24} className="text-white" />
           </button>
           <div>
-            <h1
-              className={`text-4xl sm:text-5xl font-heading font-black leading-tight text-white drop-shadow-md uppercase transition-all duration-300 ease-out ${isTitleEntering ? 'translate-y-10 scale-90 opacity-50' : 'translate-y-0 scale-100 opacity-100'}`}
-            >
-              {exerciseName}
-            </h1>
-            <p
-              className={`mt-1 text-xs font-heading uppercase tracking-[0.2em] text-gray-300 transition-all duration-300 ease-out ${isMetaEntering ? 'translate-y-8 scale-95 opacity-40' : 'translate-y-0 scale-100 opacity-100'}`}
-            >
-              {headerSetCountText}
-            </p>
             <p className="text-lg text-gray-400 font-heading uppercase tracking-wider">
               {displayDate
                 ? displayDate.toLocaleDateString('es-ES', {
@@ -399,10 +389,23 @@ export default function ExerciseDetailPage() {
                   })
                 : date}
             </p>
+            <h1
+              className={`text-4xl sm:text-5xl font-heading font-black leading-tight text-white drop-shadow-md uppercase transition-all duration-300 ease-out ${isTitleEntering ? 'translate-y-10 scale-90 opacity-50' : 'translate-y-0 scale-100 opacity-100'}`}
+            >
+              {exerciseName}
+            </h1>
+            <p
+              className={`mt-1 text-xs font-heading uppercase tracking-[0.2em] text-gray-300 transition-all duration-300 ease-out ${isMetaEntering ? 'translate-y-8 scale-95 opacity-40' : 'translate-y-0 scale-100 opacity-100'}`}
+            >
+              {headerSetCountText}
+            </p>
             {exerciseOneRm !== null && oneRmUnit && (
-              <p className="text-xs text-gray-300 mt-1 font-mono">
-                1RM ({exerciseLiftId}): {exerciseOneRm} {oneRmUnit}
-              </p>
+              <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-[#d6ff43]/45 bg-[#d6ff43]/10 px-2.5 py-1.5 text-[#e8f8b0]">
+                <Dumbbell size={14} className="text-[#d6ff43]" />
+                <p className="text-xs font-semibold uppercase tracking-[0.14em]">
+                  1RM {exerciseLiftId ? `(${exerciseLiftId})` : ''}: {exerciseOneRm} {oneRmUnit}
+                </p>
+              </div>
             )}
           </div>
         </div>
@@ -424,7 +427,7 @@ export default function ExerciseDetailPage() {
                 <div className="flex items-center justify-between mb-2">
                   <div>
                     <span className="block text-xs font-heading uppercase tracking-widest opacity-70">
-                      Set {set.setNumber}
+                      Serie {set.setNumber}
                     </span>
                     <span className={isNext ? 'text-2xl font-black font-heading' : 'text-xl font-bold font-heading'}>
                       {set.repsTarget} reps @ {set.targetWeight} {set.unit}
