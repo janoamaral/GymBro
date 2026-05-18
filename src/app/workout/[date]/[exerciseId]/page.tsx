@@ -285,6 +285,40 @@ export default function ExerciseDetailPage() {
     setShowCalculator(true);
   };
 
+  const renderFeelingSection = (set: Set, isNext: boolean) => {
+    if (!set.isDone) {
+      return (
+        <p className={isNext ? 'mb-2 text-xs font-semibold text-[#101010]/80' : 'mb-2 text-xs text-gray-400'}>
+          Marca este set como completado para registrar tu feeling.
+        </p>
+      );
+    }
+
+    return (
+      <div className="mb-2">
+        <label className={isNext ? 'block text-xs font-bold text-[#101010] mb-1' : 'block text-xs font-medium text-gray-300 mb-1'}>
+          Feeling: {set.setFeelingScore || '—'}
+        </label>
+        <div className="flex items-center gap-3">
+          <span className={isNext ? 'text-xs text-[#101010] w-14' : 'text-xs text-gray-400 w-14'}>Muy cansado</span>
+          <input
+            type="range"
+            min="1"
+            max="5"
+            value={set.setFeelingScore || 3}
+            onChange={(e) =>
+              handleSetFeelingChange(set.id, Number.parseInt(e.target.value, 10))
+            }
+            title={`Sensación del set ${set.setNumber}`}
+            aria-label={`Sensación del set ${set.setNumber}`}
+            className={isNext ? 'flex-1 h-2 appearance-none rounded-lg bg-[#eaffb0] accent-[#101010] cursor-pointer' : 'flex-1 h-2 appearance-none rounded-lg bg-[#1f2630] accent-[#d6ff43] cursor-pointer'}
+          />
+          <span className={isNext ? 'text-xs text-[#101010] w-20' : 'text-xs text-gray-400 w-20'}>Lightweight 💪</span>
+        </div>
+      </div>
+    );
+  };
+
   const exerciseName = sets.length > 0 ? sets[0].exercise.name : entryTitle ?? 'Exercise';
   const setCountText = `${sets.length} set${sets.length > 1 ? 's' : ''}`;
   const headerSetCountText = entrySetCountText ?? setCountText;
@@ -415,28 +449,8 @@ export default function ExerciseDetailPage() {
                   </div>
                 </div>
 
-                {/* Feeling Slider */}
-                <div className="mb-2">
-                  <label className={isNext ? 'block text-xs font-bold text-[#101010] mb-1' : 'block text-xs font-medium text-gray-300 mb-1'}>
-                    Feeling: {set.setFeelingScore || '—'}
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <span className={isNext ? 'text-xs text-[#101010] w-14' : 'text-xs text-gray-400 w-14'}>Muy cansado</span>
-                    <input
-                      type="range"
-                      min="1"
-                      max="5"
-                      value={set.setFeelingScore || 3}
-                      onChange={(e) =>
-                        handleSetFeelingChange(set.id, Number.parseInt(e.target.value, 10))
-                      }
-                      title={`Sensación del set ${set.setNumber}`}
-                      aria-label={`Sensación del set ${set.setNumber}`}
-                      className={isNext ? 'flex-1 h-2 appearance-none rounded-lg bg-[#eaffb0] accent-[#101010] cursor-pointer' : 'flex-1 h-2 appearance-none rounded-lg bg-[#1f2630] accent-[#d6ff43] cursor-pointer'}
-                    />
-                    <span className={isNext ? 'text-xs text-[#101010] w-20' : 'text-xs text-gray-400 w-20'}>Lightweight 💪</span>
-                  </div>
-                </div>
+                {/* Feeling: solo despues de completar el set */}
+                {renderFeelingSection(set, isNext)}
 
                 {/* Botón de calcular pesos */}
                 <button
