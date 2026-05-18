@@ -83,27 +83,27 @@ export function PlateCalculatorModal({
             value={barbellWeight}
             onChange={handleBarbellChange}
             title="Peso de la barra"
-            className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
+            className="field-dark"
           />
         </div>
 
         {result && (
           <>
-            <div className="bg-gray-700 rounded p-3">
+            <div className="panel-soft rounded-xl p-3">
               <p className="text-sm text-gray-400">Per Side (exact)</p>
               <p className="text-xl font-bold text-[#d6ff43]">
                 {result.perSide} {unit}
               </p>
             </div>
 
-            <div className="bg-gray-700 rounded p-3">
+            <div className="panel-soft rounded-xl p-3">
               <p className="text-sm text-gray-400">Per Side (rounded)</p>
               <p className="text-xl font-bold text-[#d6ff43]">
                 {result.roundedPerSide} {unit}
               </p>
             </div>
 
-            <div className="bg-gray-700 rounded p-3">
+            <div className="panel-soft rounded-xl p-3">
               <p className="text-sm text-gray-400">Total Loaded</p>
               <p className="text-xl font-bold text-white">
                 {result.totalFromBarAndPlates} {unit}
@@ -111,7 +111,7 @@ export function PlateCalculatorModal({
             </div>
 
             {plates.length > 0 && (
-              <div className="bg-gray-700 rounded p-3">
+              <div className="panel-soft rounded-xl p-3">
                 <p className="text-sm font-medium text-gray-300 mb-2">Plate Suggestion</p>
                 <div className="flex flex-wrap gap-2">
                   {plateBadges.map(({ plate, key }) => (
@@ -131,7 +131,7 @@ export function PlateCalculatorModal({
         <div className="flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+            className="btn-dark px-4 py-2"
           >
             Close
           </button>

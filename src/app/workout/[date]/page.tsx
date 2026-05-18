@@ -28,6 +28,25 @@ interface SessionWithSets {
   sets: Set[];
 }
 
+const groupSetsByExercise = (sessions: SessionWithSets[]): ExerciseGroup[] => {
+  const grouped = sessions
+    .flatMap((session) => session.sets)
+    .reduce<Map<string, ExerciseGroup>>((acc, set) => {
+      const key = set.exercise.id;
+      const currentGroup = acc.get(key) ?? {
+        exerciseId: set.exercise.id,
+        exerciseName: set.exercise.name,
+        sets: [],
+      };
+
+      currentGroup.sets.push(set);
+      acc.set(key, currentGroup);
+      return acc;
+    }, new Map<string, ExerciseGroup>());
+
+  return Array.from(grouped.values());
+};
+
 export default function WorkoutDayPage() {
   const router = useRouter();
   const params = useParams();
@@ -61,27 +80,9 @@ export default function WorkoutDayPage() {
 
         const data = await res.json();
 
-        // Group sets by exercise
-        const groupMap = new Map<string, ExerciseGroup>();
-
         const sessions = data.sessions as SessionWithSets[];
         setSessionIds(sessions.map((session) => session.id));
-
-        sessions.forEach((session) => {
-          session.sets.forEach((set: Set) => {
-            const key = set.exercise.id;
-            const currentGroup = groupMap.get(key) ?? {
-              exerciseId: set.exercise.id,
-              exerciseName: set.exercise.name,
-              sets: [],
-            };
-
-            currentGroup.sets.push(set);
-            groupMap.set(key, currentGroup);
-          });
-        });
-
-        setExercises(Array.from(groupMap.values()));
+        setExercises(groupSetsByExercise(sessions));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
@@ -126,7 +127,7 @@ export default function WorkoutDayPage() {
 
   if (loading) {
     return (
-      <main className="min-h-full bg-gray-900 px-4 py-8">
+      <main className="app-canvas min-h-full px-4 py-8">
         <p className="text-gray-400">Loading...</p>
       </main>
     );
@@ -134,14 +135,14 @@ export default function WorkoutDayPage() {
 
   if (error) {
     return (
-      <main className="min-h-full bg-gray-900 px-4 py-8">
+      <main className="app-canvas min-h-full px-4 py-8">
         <p className="text-red-400">{error}</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-full bg-gray-900 px-4 py-8 sm:px-6 lg:px-8">
+    <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8 flex items-start justify-between gap-4">
@@ -150,7 +151,7 @@ export default function WorkoutDayPage() {
               onClick={() => router.back()}
               title="Volver"
               aria-label="Volver"
-              className="p-2 hover:bg-gray-800 rounded transition-colors"
+              className="btn-dark p-2"
             >
               <ArrowLeft size={24} className="text-white" />
             </button>
@@ -186,7 +187,7 @@ export default function WorkoutDayPage() {
             <button
               key={exerciseGroup.exerciseId}
               onClick={() => router.push(`/workout/${date}/${exerciseGroup.exerciseId}`)}
-              className="w-full bg-gray-800 rounded-lg p-4 text-left hover:bg-gray-700 transition-colors"
+              className="panel w-full p-4 text-left transition-colors"
             >
               <h3 className="text-xl font-semibold text-white">
                 {exerciseGroup.exerciseName}

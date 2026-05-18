@@ -3,14 +3,14 @@
 import { Modal } from './modal';
 
 interface ConfirmDialogProps {
-  isOpen: boolean;
-  message: string;
-  title?: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-  confirmText?: string;
-  cancelText?: string;
-  isDanger?: boolean;
+  readonly isOpen: boolean;
+  readonly message: string;
+  readonly title?: string;
+  readonly onConfirm: () => void;
+  readonly onCancel: () => void;
+  readonly confirmText?: string;
+  readonly cancelText?: string;
+  readonly isDanger?: boolean;
 }
 
 export function ConfirmDialog({
@@ -29,16 +29,16 @@ export function ConfirmDialog({
       <div className="flex gap-3 justify-end">
         <button
           onClick={onCancel}
-          className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+          className="btn-dark px-4 py-2"
         >
           {cancelText}
         </button>
         <button
           onClick={onConfirm}
-          className={`px-4 py-2 rounded text-gray-900 font-medium transition-colors ${
+          className={`px-4 py-2 font-medium transition-colors ${
             isDanger
-              ? 'bg-red-500 hover:bg-red-600'
-              : 'bg-[#d6ff43] hover:bg-yellow-400'
+              ? 'rounded-xl bg-red-500 text-white hover:bg-red-600'
+              : 'btn-accent'
           }`}
         >
           {confirmText}

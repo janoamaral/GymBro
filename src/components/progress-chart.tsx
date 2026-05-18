@@ -84,7 +84,7 @@ export function ProgressChart() {
 
   if (loading) {
     return (
-      <div className="bg-gray-800 rounded-lg p-4 h-64 flex items-center justify-center">
+      <div className="panel flex h-64 items-center justify-center p-4">
         <p className="text-gray-400">Loading progress...</p>
       </div>
     );
@@ -92,29 +92,29 @@ export function ProgressChart() {
 
   if (data.length === 0) {
     return (
-      <div className="bg-gray-800 rounded-lg p-4 h-64 flex items-center justify-center">
+      <div className="panel flex h-64 items-center justify-center p-4">
         <p className="text-gray-400">No progress data yet</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4">
+    <div className="panel p-4">
       <h3 className="text-lg font-semibold text-white mb-4">Progress</h3>
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#2f3a47" />
           <XAxis
             dataKey="date"
-            stroke="#9ca3af"
+            stroke="#9fb0c2"
             tick={{ fontSize: 12 }}
             tickFormatter={(date) => new Date(date).toLocaleDateString()}
           />
-          <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} />
+          <YAxis stroke="#9fb0c2" tick={{ fontSize: 12 }} />
           <Tooltip
             contentStyle={{
-              backgroundColor: '#1f2937',
-              border: '1px solid #4b5563',
+              backgroundColor: '#0f141b',
+              border: '1px solid rgba(116, 201, 255, 0.35)',
               borderRadius: '0.5rem',
             }}
             labelStyle={{ color: '#fff' }}

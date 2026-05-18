@@ -17,23 +17,32 @@ export default function PlanPage() {
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
   // Step 2 state
-  const [startDate, setStartDate] = useState('');
+  const [startDate, setStartDate] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  });
   const [weekNumber, setWeekNumber] = useState(1);
   const [generateMonthly, setGenerateMonthly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const has531Exercises = exercises.some((ex) => ex.method === '531');
+  const selectedWeek = has531Exercises ? weekNumber : 1;
+  const remainingWeeks = Math.max(1, 5 - selectedWeek);
+  const weeklyLabel = remainingWeeks === 1 ? 'semana' : 'semanas';
 
   const handleAddExercise = (exercise: Exercise) => {
-    if (editingIndex !== null) {
-      const updated = [...exercises];
-      updated[editingIndex] = exercise;
-      setExercises(updated);
-      setEditingIndex(null);
-    } else {
+    if (editingIndex === null) {
       setExercises([...exercises, exercise]);
+      setShowExerciseModal(false);
+      return;
     }
+
+    const updated = [...exercises];
+    updated[editingIndex] = exercise;
+    setExercises(updated);
+    setEditingIndex(null);
     setShowExerciseModal(false);
   };
 
@@ -114,15 +123,8 @@ export default function PlanPage() {
     }
   };
 
-  // Set default start date to tomorrow
-  useState(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    setStartDate(tomorrow.toISOString().split('T')[0]);
-  });
-
   return (
-    <main className="min-h-full bg-gray-900 px-4 py-8 sm:px-6 lg:px-8">
+    <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -135,14 +137,14 @@ export default function PlanPage() {
         </div>
 
         {error && (
-          <div className="mb-4 bg-red-500/20 border border-red-500 rounded p-3 text-red-200">
+          <div className="mb-4 rounded-xl border border-red-500 bg-red-500/20 p-3 text-red-200">
             {error}
           </div>
         )}
 
         {/* Step 1: Exercises */}
         {step === 1 && (
-          <div className="space-y-6">
+          <div className="panel space-y-6 p-5 sm:p-6">
             <ExerciseList
               exercises={exercises}
               onEdit={handleEditExercise}
@@ -156,7 +158,7 @@ export default function PlanPage() {
                   setEditingIndex(null);
                   setShowExerciseModal(true);
                 }}
-                className="h-16 w-16 rounded-full bg-[#d6ff43] text-gray-900 flex items-center justify-center shadow-lg hover:bg-yellow-400 transition-colors font-bold text-2xl"
+                className="btn-accent flex h-16 w-16 items-center justify-center rounded-full text-2xl font-bold shadow-lg"
               >
                 +
               </button>
@@ -166,14 +168,14 @@ export default function PlanPage() {
             <div className="flex gap-3 justify-between pt-6">
               <button
                 onClick={() => router.push('/')}
-                className="flex-1 px-4 py-3 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors font-medium"
+                className="btn-dark flex-1 px-4 py-3 font-medium"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleNextStep}
                 disabled={exercises.length === 0}
-                className="flex-1 px-4 py-3 rounded bg-[#d6ff43] text-gray-900 hover:bg-yellow-400 transition-colors font-bold disabled:opacity-50"
+                className="btn-accent flex-1 px-4 py-3 font-bold disabled:opacity-50"
               >
                 Siguiente
               </button>
@@ -183,28 +185,32 @@ export default function PlanPage() {
 
         {/* Step 2: Schedule */}
         {step === 2 && (
-          <div className="space-y-6">
+          <div className="panel space-y-6 p-5 sm:p-6">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="plan-start-date" className="block text-sm font-medium text-gray-300 mb-2">
                 Fecha de Inicio
               </label>
               <input
+                id="plan-start-date"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
+                title="Fecha de inicio"
+                className="field-dark"
               />
             </div>
 
             {has531Exercises && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label htmlFor="plan-week-number" className="block text-sm font-medium text-gray-300 mb-2">
                   Semana del Plan
                 </label>
                 <select
+                  id="plan-week-number"
                   value={weekNumber}
-                  onChange={(e) => setWeekNumber(parseInt(e.target.value))}
-                  className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
+                  onChange={(e) => setWeekNumber(Number.parseInt(e.target.value, 10))}
+                  title="Semana del plan"
+                  className="field-dark"
                 >
                   <option value={1}>Semana 1</option>
                   <option value={2}>Semana 2</option>
@@ -215,15 +221,15 @@ export default function PlanPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <p className="block text-sm font-medium text-gray-300 mb-2">
                 Generar plan mensual
-              </label>
+              </p>
               <Toggle
                 checked={generateMonthly}
                 onChange={setGenerateMonthly}
                 label={
                   generateMonthly
-                    ? 'Sí, generar 4 semanas'
+                    ? `Sí, generar ${remainingWeeks} ${weeklyLabel}`
                     : 'No, solo esta semana'
                 }
               />
@@ -234,14 +240,14 @@ export default function PlanPage() {
               <button
                 onClick={() => setStep(1)}
                 disabled={loading}
-                className="flex-1 px-4 py-3 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors font-medium disabled:opacity-50"
+                className="btn-dark flex-1 px-4 py-3 font-medium disabled:opacity-50"
               >
                 Atrás
               </button>
               <button
                 onClick={handleSavePlan}
                 disabled={loading}
-                className="flex-1 px-4 py-3 rounded bg-[#d6ff43] text-gray-900 hover:bg-yellow-400 transition-colors font-bold disabled:opacity-50"
+                className="btn-accent flex-1 px-4 py-3 font-bold disabled:opacity-50"
               >
                 {loading ? 'Guardando...' : 'Guardar Plan'}
               </button>
@@ -258,7 +264,7 @@ export default function PlanPage() {
           setEditingIndex(null);
         }}
         onSave={handleAddExercise}
-        initialExercise={editingIndex !== null ? exercises[editingIndex] : undefined}
+        initialExercise={editingIndex === null ? undefined : exercises[editingIndex]}
       />
 
       {/* Delete Confirmation Dialog */}

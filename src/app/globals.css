@@ -3,6 +3,7 @@
 :root {
   --background: #020202;
   --surface: #101010;
+  --surface-2: #0b0d10;
   --foreground: #f5f5f5;
   --muted: #8b8b8b;
   --accent: #d6ff43;
@@ -23,6 +24,14 @@ body {
   font-family: var(--font-body), sans-serif;
 }
 
+.app-canvas {
+  background:
+    radial-gradient(circle at 12% 16%, rgba(118, 255, 132, 0.12), transparent 34%),
+    radial-gradient(circle at 88% 22%, rgba(119, 176, 255, 0.08), transparent 36%),
+    radial-gradient(circle at 50% 82%, rgba(33, 118, 255, 0.1), transparent 44%),
+    linear-gradient(180deg, #030405 0%, #040607 38%, #020202 100%);
+}
+
 h1,
 h2,
 h3,
@@ -35,8 +44,87 @@ label,
 }
 
 .panel {
+  position: relative;
+  border-radius: 1.25rem;
   background: linear-gradient(180deg, #141414 0%, #0d0d0d 100%);
-  border: 1px solid rgba(214, 255, 67, 0.18);
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    145deg,
+    rgba(214, 255, 67, 0.38),
+    rgba(116, 201, 255, 0.2),
+    rgba(255, 255, 255, 0.08)
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.panel-soft {
+  position: relative;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(17, 20, 24, 0.92), rgba(10, 12, 15, 0.92));
+}
+
+.panel-soft::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(96, 153, 255, 0.16), rgba(118, 255, 132, 0.2));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.field-dark {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, #141a21 0%, #0f141b 100%);
+  padding: 0.55rem 0.75rem;
+  color: #f5f5f5;
+}
+
+.field-dark:focus {
+  outline: none;
+  border-color: rgba(214, 255, 67, 0.62);
+  box-shadow: 0 0 0 1px rgba(214, 255, 67, 0.25);
+}
+
+.btn-dark {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, #1a2029 0%, #121821 100%);
+  color: #fff;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.btn-dark:hover {
+  border-color: rgba(116, 201, 255, 0.42);
+  background: linear-gradient(180deg, #212934 0%, #151c25 100%);
+}
+
+.btn-accent {
+  border-radius: 0.75rem;
+  background: #d6ff43;
+  color: #111;
+  transition: background-color 0.2s ease;
+}
+
+.btn-accent:hover {
+  background: #c6ef3d;
 }
 
 .accent-glow {

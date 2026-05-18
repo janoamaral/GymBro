@@ -25,6 +25,11 @@ interface SessionWithSets {
   sets: Set[];
 }
 
+const extractExerciseSets = (sessions: SessionWithSets[], exerciseId: string): Set[] =>
+  sessions
+    .flatMap((session) => session.sets)
+    .filter((set) => set.exercise.id === exerciseId);
+
 export default function ExerciseDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -54,6 +59,32 @@ export default function ExerciseDetailPage() {
   const [exerciseLiftId, setExerciseLiftId] = useState<'SQ' | 'DL' | 'BP' | 'OHP' | null>(null);
   const [oneRmUnit, setOneRmUnit] = useState<'kg' | 'lb' | null>(null);
 
+  const clearExerciseProfile = () => {
+    setExerciseOneRm(null);
+    setOneRmUnit(null);
+  };
+
+  const loadExerciseProfile = async (lift: 'SQ' | 'DL' | 'BP' | 'OHP') => {
+    const profileRes = await fetch('/api/training/531/profile');
+    if (!profileRes.ok) {
+      clearExerciseProfile();
+      return;
+    }
+
+    const profileData = await profileRes.json();
+    const profile = (profileData.profiles ?? []).find(
+      (item: { liftId: string }) => item.liftId === lift
+    );
+
+    if (!profile) {
+      clearExerciseProfile();
+      return;
+    }
+
+    setExerciseOneRm(Number(profile.oneRm));
+    setOneRmUnit(profile.unit as 'kg' | 'lb');
+  };
+
   useEffect(() => {
     const fetchExerciseSets = async () => {
       try {
@@ -61,46 +92,27 @@ export default function ExerciseDetailPage() {
         if (!res.ok) throw new Error('Failed to fetch sessions');
 
         const data = await res.json();
-
-        // Find all sets for this exercise
-        const filteredSets: Set[] = [];
-        (data.sessions as SessionWithSets[]).forEach((session) => {
-          session.sets.forEach((set: Set) => {
-            if (set.exercise.id === exerciseId) {
-              filteredSets.push(set);
-            }
-          });
-        });
+        const filteredSets = extractExerciseSets(data.sessions as SessionWithSets[], exerciseId);
 
         setSets(filteredSets);
 
-        if (filteredSets.length > 0) {
-          setCalculatorUnit(filteredSets[0].unit as 'kg' | 'lb');
-
-          const firstLiftId = filteredSets[0].liftId;
-          setExerciseLiftId(firstLiftId);
-
-          if (firstLiftId) {
-            const profileRes = await fetch('/api/training/531/profile');
-            if (profileRes.ok) {
-              const profileData = await profileRes.json();
-              const profile = (profileData.profiles ?? []).find(
-                (item: { liftId: string }) => item.liftId === firstLiftId
-              );
-
-              if (profile) {
-                setExerciseOneRm(Number(profile.oneRm));
-                setOneRmUnit(profile.unit as 'kg' | 'lb');
-              } else {
-                setExerciseOneRm(null);
-                setOneRmUnit(null);
-              }
-            }
-          } else {
-            setExerciseOneRm(null);
-            setOneRmUnit(null);
-          }
+        const firstSet = filteredSets[0];
+        if (!firstSet) {
+          setExerciseLiftId(null);
+          clearExerciseProfile();
+          return;
         }
+
+        setCalculatorUnit(firstSet.unit as 'kg' | 'lb');
+        const firstLiftId = firstSet.liftId;
+        setExerciseLiftId(firstLiftId);
+
+        if (!firstLiftId) {
+          clearExerciseProfile();
+          return;
+        }
+
+        await loadExerciseProfile(firstLiftId);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
@@ -173,7 +185,7 @@ export default function ExerciseDetailPage() {
 
   if (loading) {
     return (
-      <main className="min-h-full bg-gray-900 px-4 py-8">
+      <main className="app-canvas min-h-full px-4 py-8">
         <p className="text-gray-400">Loading...</p>
       </main>
     );
@@ -181,20 +193,22 @@ export default function ExerciseDetailPage() {
 
   if (error) {
     return (
-      <main className="min-h-full bg-gray-900 px-4 py-8">
+      <main className="app-canvas min-h-full px-4 py-8">
         <p className="text-red-400">{error}</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-full bg-gray-900 px-4 py-8 sm:px-6 lg:px-8">
+    <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8 flex items-center gap-4">
           <button
             onClick={() => router.back()}
-            className="p-2 hover:bg-gray-800 rounded transition-colors"
+            title="Volver"
+            aria-label="Volver"
+            className="btn-dark p-2"
           >
             <ArrowLeft size={24} className="text-white" />
           </button>
@@ -224,7 +238,7 @@ export default function ExerciseDetailPage() {
           {sets.map((set) => (
             <div
               key={set.id}
-              className="bg-gray-800 rounded-lg p-4 space-y-4"
+              className="panel space-y-4 p-4"
             >
               {/* Set Header */}
               <div className="flex items-center justify-between">
@@ -241,6 +255,8 @@ export default function ExerciseDetailPage() {
                     type="checkbox"
                     checked={set.isDone}
                     onChange={() => handleToggleDone(set.id, set.isDone)}
+                    title={`Marcar set ${set.setNumber} como completado`}
+                    aria-label={`Marcar set ${set.setNumber} como completado`}
                     className="w-6 h-6 rounded border-2 border-gray-600 checked:bg-[#d6ff43] checked:border-[#d6ff43] cursor-pointer"
                   />
                   <span className="text-sm text-gray-400">Done</span>
@@ -260,9 +276,11 @@ export default function ExerciseDetailPage() {
                     max="5"
                     value={set.setFeelingScore || 3}
                     onChange={(e) =>
-                      handleSetFeelingChange(set.id, parseInt(e.target.value))
+                      handleSetFeelingChange(set.id, Number.parseInt(e.target.value, 10))
                     }
-                    className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-[#d6ff43]"
+                    title={`Sensación del set ${set.setNumber}`}
+                    aria-label={`Sensación del set ${set.setNumber}`}
+                    className="flex-1 h-2 appearance-none rounded-lg bg-[#1f2630] accent-[#d6ff43] cursor-pointer"
                   />
                   <span className="text-xs text-gray-400 w-20">Lightweight 💪</span>
                 </div>
@@ -271,7 +289,7 @@ export default function ExerciseDetailPage() {
               {/* Plate Calculator Button */}
               <button
                 onClick={() => handleOpenCalculator(Number(set.targetWeight), set.unit as 'kg' | 'lb')}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+                className="btn-dark flex w-full items-center justify-center gap-2 px-4 py-2"
               >
                 <Calculator size={18} />
                 Calcular Pesos

@@ -3,11 +3,11 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface CalendarProps {
-  year: number;
-  month: number; // 0-11
-  workoutDates: string[]; // Array of YYYY-MM-DD strings
-  onDayClick: (date: string) => void;
-  onMonthChange: (year: number, month: number) => void;
+  readonly year: number;
+  readonly month: number; // 0-11
+  readonly workoutDates: string[]; // Array of YYYY-MM-DD strings
+  readonly onDayClick: (date: string) => void;
+  readonly onMonthChange: (year: number, month: number) => void;
 }
 
 export function Calendar({
@@ -16,7 +16,7 @@ export function Calendar({
   workoutDates,
   onDayClick,
   onMonthChange,
-}: CalendarProps) {
+}: Readonly<CalendarProps>) {
   const today = new Date();
   const isCurrentMonth =
     year === today.getFullYear() && month === today.getMonth();
@@ -27,12 +27,12 @@ export function Calendar({
   const daysInMonth = lastDay.getDate();
   const startingDayOfWeek = firstDay.getDay();
 
-  const days: (number | null)[] = [];
+  const days: Array<{ key: string; day: number | null }> = [];
   for (let i = 0; i < startingDayOfWeek; i++) {
-    days.push(null);
+    days.push({ key: `empty-${year}-${month}-${i}`, day: null });
   }
   for (let i = 1; i <= daysInMonth; i++) {
-    days.push(i);
+    days.push({ key: `day-${year}-${month}-${i}`, day: i });
   }
 
   const workoutDateSet = new Set(workoutDates);
@@ -59,11 +59,13 @@ export function Calendar({
   ];
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4">
+    <div className="panel p-4">
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={handlePrevMonth}
-          className="p-1 hover:bg-gray-700 rounded transition-colors"
+          className="rounded-lg border border-white/10 bg-[#101419] p-1 transition-colors hover:border-[#d6ff43]/45"
+          title="Previous month"
+          aria-label="Previous month"
         >
           <ChevronLeft size={20} className="text-gray-400" />
         </button>
@@ -72,7 +74,9 @@ export function Calendar({
         </h3>
         <button
           onClick={handleNextMonth}
-          className="p-1 hover:bg-gray-700 rounded transition-colors"
+          className="rounded-lg border border-white/10 bg-[#101419] p-1 transition-colors hover:border-[#d6ff43]/45"
+          title="Next month"
+          aria-label="Next month"
         >
           <ChevronRight size={20} className="text-gray-400" />
         </button>
@@ -85,11 +89,11 @@ export function Calendar({
           </div>
         ))}
 
-        {days.map((day, index) => {
+        {days.map(({ key, day }) => {
           if (day === null) {
             return (
               <div
-                key={`empty-${index}`}
+                key={key}
                 className="aspect-square"
               />
             );
@@ -101,17 +105,17 @@ export function Calendar({
 
           return (
             <button
-              key={day}
+              key={key}
               onClick={() => onDayClick(dateStr)}
-              className={`aspect-square rounded flex flex-col items-center justify-center relative transition-colors ${
+              className={`relative flex aspect-square flex-col items-center justify-center rounded-xl border border-white/10 transition-colors ${
                 isToday
-                  ? 'bg-[#d6ff43] text-gray-900 font-bold'
-                  : 'bg-gray-700 text-white hover:bg-gray-600'
+                  ? 'bg-[#d6ff43] text-gray-900 font-bold shadow-[0_0_24px_rgba(214,255,67,0.45)]'
+                  : 'bg-[#12171d] text-white hover:border-[#74c9ff]/45 hover:bg-[#151d25]'
               }`}
             >
               <span className="text-sm">{day}</span>
               {hasWorkout && (
-                <div className="absolute bottom-1 w-1.5 h-1.5 bg-green-400 rounded-full" />
+                <div className="absolute bottom-1 h-1.5 w-1.5 rounded-full bg-green-400" />
               )}
             </button>
           );

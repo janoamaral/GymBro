@@ -165,14 +165,14 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-full bg-gray-900 px-4 py-8 sm:px-6 lg:px-8">
+      <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
         <p className="text-gray-400">Loading...</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-full bg-gray-900 px-4 py-8 sm:px-6 lg:px-8">
+    <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-8 flex items-center gap-4">
@@ -180,7 +180,7 @@ export default function SettingsPage() {
             onClick={() => router.back()}
             title="Volver"
             aria-label="Volver"
-            className="p-2 hover:bg-gray-800 rounded transition-colors"
+            className="btn-dark p-2"
           >
             <ArrowLeft size={24} className="text-white" />
           </button>
@@ -189,7 +189,7 @@ export default function SettingsPage() {
 
         {message && (
           <div
-            className={`mb-4 rounded border p-3 ${
+            className={`mb-4 rounded-xl border p-3 ${
               messageType === 'success'
                 ? 'border-green-500 bg-green-500/20 text-green-200'
                 : 'border-red-500 bg-red-500/20 text-red-200'
@@ -200,7 +200,7 @@ export default function SettingsPage() {
         )}
 
         {/* Settings Form */}
-        <div className="bg-gray-800 rounded-lg p-6 space-y-6">
+        <div className="panel space-y-6 p-6">
           <div>
             <h2 className="text-lg font-semibold text-white">Perfil</h2>
             <p className="text-xs text-gray-400 mt-1 mb-4">
@@ -218,7 +218,7 @@ export default function SettingsPage() {
                 onChange={(e) => setDisplayName(e.target.value)}
                 maxLength={80}
                 placeholder="Ej: Jano"
-                className="w-full rounded border border-gray-600 bg-gray-700 px-3 py-2 text-white focus:outline-none focus:border-[#d6ff43]"
+                className="field-dark"
               />
 
               <label htmlFor="avatar-url" className="block text-sm font-medium text-gray-300">
@@ -230,7 +230,7 @@ export default function SettingsPage() {
                 value={avatarUrl}
                 onChange={(e) => setAvatarUrl(e.target.value)}
                 placeholder="https://..."
-                className="w-full rounded border border-gray-600 bg-gray-700 px-3 py-2 text-white focus:outline-none focus:border-[#d6ff43]"
+                className="field-dark"
               />
             </div>
           </div>
@@ -256,7 +256,7 @@ export default function SettingsPage() {
                 }}
                 min="0.5"
                 max="50"
-                className="w-24 bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
+                className="field-dark w-24"
               />
               <span className="text-gray-300">kg</span>
             </div>
@@ -272,7 +272,7 @@ export default function SettingsPage() {
               </div>
               <button
                 onClick={handleResetCycles}
-                className="rounded bg-gray-700 px-3 py-2 text-sm text-white transition-colors hover:bg-gray-600"
+                className="btn-dark px-3 py-2 text-sm"
               >
                 Resetear ciclos
               </button>
@@ -285,7 +285,7 @@ export default function SettingsPage() {
                 {profiles.map((profile) => (
                   <div
                     key={profile.liftId}
-                    className="grid grid-cols-1 gap-3 rounded bg-gray-700/60 p-3 sm:grid-cols-4"
+                    className="panel-soft grid grid-cols-1 gap-3 rounded-xl p-3 sm:grid-cols-4"
                   >
                     <div>
                       <p className="text-xs text-gray-400">Lift</p>
@@ -300,7 +300,7 @@ export default function SettingsPage() {
                         min="0.5"
                         value={profile.oneRm}
                         onChange={(e) => handleProfileChange(profile.liftId, 'oneRm', e.target.value)}
-                        className="w-full rounded border border-gray-600 bg-gray-800 px-3 py-2 text-white focus:outline-none focus:border-[#d6ff43]"
+                        className="field-dark"
                       />
                     </label>
 
@@ -312,7 +312,7 @@ export default function SettingsPage() {
                         step="1"
                         value={profile.cycleNumber}
                         onChange={(e) => handleProfileChange(profile.liftId, 'cycleNumber', e.target.value)}
-                        className="w-full rounded border border-gray-600 bg-gray-800 px-3 py-2 text-white focus:outline-none focus:border-[#d6ff43]"
+                        className="field-dark"
                       />
                     </label>
 
@@ -321,7 +321,7 @@ export default function SettingsPage() {
                       <select
                         value={profile.unit}
                         onChange={(e) => handleProfileChange(profile.liftId, 'unit', e.target.value)}
-                        className="w-full rounded border border-gray-600 bg-gray-800 px-3 py-2 text-white focus:outline-none focus:border-[#d6ff43]"
+                        className="field-dark"
                       >
                         <option value="kg">kg</option>
                         <option value="lb">lb</option>
@@ -342,14 +342,14 @@ export default function SettingsPage() {
             </a>
             <button
               onClick={() => router.back()}
-              className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+              className="btn-dark px-4 py-2"
             >
               Cancelar
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-4 py-2 rounded bg-[#d6ff43] text-gray-900 font-medium hover:bg-yellow-400 transition-colors disabled:opacity-50"
+              className="btn-accent px-4 py-2 font-medium disabled:opacity-50"
             >
               {saving ? 'Guardando...' : 'Guardar'}
             </button>

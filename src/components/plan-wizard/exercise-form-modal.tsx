@@ -21,10 +21,10 @@ export interface Exercise {
 }
 
 interface ExerciseFormModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (exercise: Exercise) => void;
-  initialExercise?: Exercise;
+  readonly isOpen: boolean;
+  readonly onClose: () => void;
+  readonly onSave: (exercise: Exercise) => void;
+  readonly initialExercise?: Exercise;
 }
 
 type ExercisePickerValue = 'SQ' | 'DL' | 'BP' | 'OHP' | 'custom';
@@ -38,21 +38,23 @@ const PRESET_EXERCISES = [
 ];
 
 interface EditableSet {
+  id: string;
   reps: string;
   weight: string;
 }
 
-const EMPTY_SET: EditableSet = {
-  reps: '',
-  weight: '',
-};
+const createEditableSet = (values?: Partial<Pick<EditableSet, 'reps' | 'weight'>>): EditableSet => ({
+  id: globalThis.crypto.randomUUID(),
+  reps: values?.reps ?? '',
+  weight: values?.weight ?? '',
+});
 
 export function ExerciseFormModal({
   isOpen,
   onClose,
   onSave,
   initialExercise,
-}: ExerciseFormModalProps) {
+}: Readonly<ExerciseFormModalProps>) {
   const [name, setName] = useState(initialExercise?.name || '');
   const [liftId, setLiftId] = useState<ExercisePickerValue>(
     initialExercise?.liftId || 'BP'
@@ -62,16 +64,22 @@ export function ExerciseFormModal({
   const [sets, setSets] = useState<EditableSet[]>(() => {
     if (initialExercise?.sets && initialExercise.sets.length > 0) {
       return initialExercise.sets.map((set) => ({
+        id: globalThis.crypto.randomUUID(),
         reps: set.reps.toString(),
         weight: set.weight.toString(),
       }));
     }
 
     if (initialExercise?.weight && initialExercise?.reps) {
-      return [{ reps: initialExercise.reps.toString(), weight: initialExercise.weight.toString() }];
+      return [
+        createEditableSet({
+          reps: initialExercise.reps.toString(),
+          weight: initialExercise.weight.toString(),
+        }),
+      ];
     }
 
-    return [{ ...EMPTY_SET }];
+    return [createEditableSet()];
   });
   const [bulkCount, setBulkCount] = useState('1');
   const [unit, setUnit] = useState<'kg' | 'lb'>(initialExercise?.unit || 'kg');
@@ -90,7 +98,7 @@ export function ExerciseFormModal({
   };
 
   const addEmptySet = () => {
-    setSets((currentSets) => [...currentSets, { ...EMPTY_SET }]);
+    setSets((currentSets) => [...currentSets, createEditableSet()]);
   };
 
   const removeSet = (index: number) => {
@@ -110,19 +118,19 @@ export function ExerciseFormModal({
         return currentSets;
       }
 
-      return [...currentSets, { ...sourceSet }];
+      return [...currentSets, createEditableSet({ reps: sourceSet.reps, weight: sourceSet.weight })];
     });
   };
 
   const addIdenticalSetsFromLast = () => {
-    const count = parseInt(bulkCount, 10);
+    const count = Number.parseInt(bulkCount, 10);
 
     if (Number.isNaN(count) || count <= 0) {
       alert('Please enter a valid number of sets to add');
       return;
     }
 
-    const sourceSet = sets[sets.length - 1];
+    const sourceSet = sets.at(-1);
     if (!sourceSet) {
       return;
     }
@@ -134,7 +142,7 @@ export function ExerciseFormModal({
 
     setSets((currentSets) => [
       ...currentSets,
-      ...Array.from({ length: count }, () => ({ ...sourceSet })),
+      ...Array.from({ length: count }, () => createEditableSet({ reps: sourceSet.reps, weight: sourceSet.weight })),
     ]);
   };
 
@@ -148,7 +156,7 @@ export function ExerciseFormModal({
         return;
       }
     } else {
-      finalLiftId = liftId as 'SQ' | 'DL' | 'BP' | 'OHP';
+      finalLiftId = liftId;
       finalName = PRESET_EXERCISES.find(e => e.value === liftId)?.label || name;
     }
 
@@ -162,8 +170,8 @@ export function ExerciseFormModal({
     if (method === 'none') {
       try {
         parsedSets = sets.map((set, index) => {
-          const parsedWeight = parseFloat(set.weight);
-          const parsedReps = parseInt(set.reps, 10);
+          const parsedWeight = Number.parseFloat(set.weight);
+          const parsedReps = Number.parseInt(set.reps, 10);
 
           if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
             throw new Error(`Set ${index + 1}: invalid weight`);
@@ -193,7 +201,7 @@ export function ExerciseFormModal({
       name: finalName,
       liftId: finalLiftId,
       method,
-      oneRm: method === '531' ? parseFloat(oneRm) : undefined,
+      oneRm: method === '531' ? Number.parseFloat(oneRm) : undefined,
       sets: method === 'none' ? parsedSets : undefined,
       weight: method === 'none' ? parsedSets[0]?.weight : undefined,
       reps: method === 'none' ? parsedSets[0]?.reps : undefined,
@@ -208,13 +216,15 @@ export function ExerciseFormModal({
     <Modal isOpen={isOpen} onClose={onClose} title={initialExercise ? 'Editar Ejercicio' : 'Agregar Ejercicio'}>
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label htmlFor="exercise-picker" className="block text-sm font-medium text-gray-300 mb-2">
             Ejercicio
           </label>
           <select
+            id="exercise-picker"
             value={liftId}
             onChange={(e) => setLiftId(e.target.value as ExercisePickerValue)}
-            className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
+            title="Seleccionar ejercicio"
+            className="field-dark"
           >
             {PRESET_EXERCISES.map((ex) => (
               <option key={ex.value} value={ex.value}>
@@ -226,40 +236,41 @@ export function ExerciseFormModal({
 
         {liftId === 'custom' && (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="custom-exercise-name" className="block text-sm font-medium text-gray-300 mb-2">
               Nombre del Ejercicio
             </label>
             <input
+              id="custom-exercise-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ej: Incline Bench Press"
-              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
+              className="field-dark"
             />
           </div>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <p className="block text-sm font-medium text-gray-300 mb-2">
             Método
-          </label>
+          </p>
           <div className="flex gap-2">
             <button
               onClick={() => setMethod('531')}
-              className={`flex-1 py-2 rounded transition-colors ${
+              className={`flex-1 py-2 rounded-xl transition-colors ${
                 method === '531'
-                  ? 'bg-[#d6ff43] text-gray-900'
-                  : 'bg-gray-700 text-white hover:bg-gray-600'
+                  ? 'btn-accent'
+                  : 'btn-dark'
               }`}
             >
               5/3/1
             </button>
             <button
               onClick={() => setMethod('none')}
-              className={`flex-1 py-2 rounded transition-colors ${
+              className={`flex-1 py-2 rounded-xl transition-colors ${
                 method === 'none'
-                  ? 'bg-[#d6ff43] text-gray-900'
-                  : 'bg-gray-700 text-white hover:bg-gray-600'
+                  ? 'btn-accent'
+                  : 'btn-dark'
               }`}
             >
               None
@@ -268,26 +279,26 @@ export function ExerciseFormModal({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <p className="block text-sm font-medium text-gray-300 mb-2">
             Unidad
-          </label>
+          </p>
           <div className="flex gap-2">
             <button
               onClick={() => setUnit('kg')}
-              className={`flex-1 py-2 rounded transition-colors ${
+              className={`flex-1 py-2 rounded-xl transition-colors ${
                 unit === 'kg'
-                  ? 'bg-[#d6ff43] text-gray-900'
-                  : 'bg-gray-700 text-white hover:bg-gray-600'
+                  ? 'btn-accent'
+                  : 'btn-dark'
               }`}
             >
               kg
             </button>
             <button
               onClick={() => setUnit('lb')}
-              className={`flex-1 py-2 rounded transition-colors ${
+              className={`flex-1 py-2 rounded-xl transition-colors ${
                 unit === 'lb'
-                  ? 'bg-[#d6ff43] text-gray-900'
-                  : 'bg-gray-700 text-white hover:bg-gray-600'
+                  ? 'btn-accent'
+                  : 'btn-dark'
               }`}
             >
               lb
@@ -297,29 +308,30 @@ export function ExerciseFormModal({
 
         {method === '531' ? (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="exercise-one-rm" className="block text-sm font-medium text-gray-300 mb-2">
               1RM
             </label>
             <input
+              id="exercise-one-rm"
               type="number"
               step="0.5"
               value={oneRm}
               onChange={(e) => setOneRm(e.target.value)}
               placeholder="Ej: 150"
-              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
+              className="field-dark"
             />
           </div>
         ) : (
           <>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="block text-sm font-medium text-gray-300">
+                <p className="block text-sm font-medium text-gray-300">
                   Sets
-                </label>
+                </p>
                 <button
                   type="button"
                   onClick={addEmptySet}
-                  className="text-sm px-3 py-1 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+                  className="btn-dark px-3 py-1 text-sm"
                 >
                   + Añadir Set
                 </button>
@@ -327,14 +339,14 @@ export function ExerciseFormModal({
 
               <div className="space-y-2">
                 {sets.map((set, index) => (
-                  <div key={`set-${index}`} className="bg-gray-800/70 rounded p-3 border border-gray-700 space-y-3">
+                  <div key={set.id} className="panel-soft rounded-xl p-3 space-y-3">
                     <div className="flex items-center justify-between">
                       <p className="text-sm text-gray-300 font-medium">Set {index + 1}</p>
                       <div className="flex gap-2">
                         <button
                           type="button"
                           onClick={() => cloneSet(index)}
-                          className="text-xs px-2 py-1 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+                          className="btn-dark px-2 py-1 text-xs"
                         >
                           Clonar
                         </button>
@@ -351,24 +363,26 @@ export function ExerciseFormModal({
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-xs text-gray-400 mb-1">Peso</label>
+                        <label htmlFor={`set-weight-${set.id}`} className="block text-xs text-gray-400 mb-1">Peso</label>
                         <input
+                          id={`set-weight-${set.id}`}
                           type="number"
                           step="0.5"
                           value={set.weight}
                           onChange={(e) => updateSetField(index, 'weight', e.target.value)}
                           placeholder="Ej: 80"
-                          className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
+                          className="field-dark"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-400 mb-1">Reps</label>
+                        <label htmlFor={`set-reps-${set.id}`} className="block text-xs text-gray-400 mb-1">Reps</label>
                         <input
+                          id={`set-reps-${set.id}`}
                           type="number"
                           value={set.reps}
                           onChange={(e) => updateSetField(index, 'reps', e.target.value)}
                           placeholder="Ej: 8"
-                          className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
+                          className="field-dark"
                         />
                       </div>
                     </div>
@@ -377,20 +391,22 @@ export function ExerciseFormModal({
               </div>
             </div>
 
-            <div className="bg-gray-800/60 border border-gray-700 rounded p-3 space-y-2">
+            <div className="panel-soft rounded-xl p-3 space-y-2">
               <p className="text-sm text-gray-300 font-medium">Acción rápida para series lineales</p>
               <div className="flex gap-2 items-center">
                 <input
+                  aria-label="Cantidad de sets a duplicar"
+                  title="Cantidad de sets a duplicar"
                   type="number"
                   min="1"
                   value={bulkCount}
                   onChange={(e) => setBulkCount(e.target.value)}
-                  className="w-24 bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
+                  className="field-dark w-24"
                 />
                 <button
                   type="button"
                   onClick={addIdenticalSetsFromLast}
-                  className="px-3 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors text-sm"
+                  className="btn-dark px-3 py-2 text-sm"
                 >
                   Añadir X sets idénticos
                 </button>
@@ -405,13 +421,13 @@ export function ExerciseFormModal({
         <div className="flex gap-3 justify-end pt-4">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+            className="btn-dark px-4 py-2"
           >
             Cancelar
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 rounded bg-[#d6ff43] text-gray-900 font-medium hover:bg-yellow-400 transition-colors"
+            className="btn-accent px-4 py-2 font-medium"
           >
             Guardar
           </button>

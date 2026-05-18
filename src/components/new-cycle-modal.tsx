@@ -48,12 +48,12 @@ export function NewCycleModal({
 
   useEffect(() => {
     if (isOpen) {
-      const timer = window.setTimeout(() => {
+      const timer = globalThis.setTimeout(() => {
         void fetchProfiles();
       }, 0);
 
       return () => {
-        window.clearTimeout(timer);
+        globalThis.clearTimeout(timer);
       };
     }
   }, [isOpen]);
@@ -87,7 +87,7 @@ export function NewCycleModal({
     <Modal isOpen={isOpen} onClose={onClose} title="Iniciar Nuevo Ciclo">
       <div className="space-y-4">
         {profiles.length > 0 ? (
-          <div className="bg-gray-700 rounded p-3 space-y-2">
+          <div className="panel-soft rounded-xl p-3 space-y-2">
             <p className="text-sm font-medium text-gray-300">Current Cycle Info:</p>
             {profiles.map((profile) => (
               <div key={profile.liftId} className="text-sm text-gray-300">
@@ -109,7 +109,7 @@ export function NewCycleModal({
             value={effectiveStartDate}
             onChange={(e) => setStartDate(e.target.value)}
             title="Seleccionar fecha de inicio"
-            className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#d6ff43]"
+            className="field-dark"
           />
         </div>
 
@@ -123,14 +123,14 @@ export function NewCycleModal({
           <button
             onClick={onClose}
             disabled={loading}
-            className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors disabled:opacity-50"
+            className="btn-dark px-4 py-2 disabled:opacity-50"
           >
             Cancelar
           </button>
           <button
             onClick={handleStart}
             disabled={loading || profiles.length === 0}
-            className="px-4 py-2 rounded bg-[#d6ff43] text-gray-900 font-medium hover:bg-yellow-400 transition-colors disabled:opacity-50"
+            className="btn-accent px-4 py-2 font-medium disabled:opacity-50"
           >
             {loading ? 'Iniciando...' : 'Iniciar Nuevo Ciclo'}
           </button>

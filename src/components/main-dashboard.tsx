@@ -71,14 +71,14 @@ export default function MainDashboard({
   const userInitial = userName.trim().charAt(0).toUpperCase();
 
   return (
-    <main className="min-h-full bg-gray-900 px-4 py-8 sm:px-6 lg:px-8">
+    <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/settings')}
-              className="h-14 w-14 rounded-full border border-white/20 bg-gray-800 p-1 shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-colors hover:border-[#d6ff43]"
+              className="h-14 w-14 rounded-full border border-white/20 bg-[#0f1216] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.5)] transition-colors hover:border-[#d6ff43]/70"
               title="Abrir configuración"
               aria-label="Abrir configuración"
             >
@@ -89,7 +89,7 @@ export default function MainDashboard({
                   className="h-full w-full rounded-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center rounded-full bg-gray-700 text-lg font-semibold text-gray-100">
+                <div className="flex h-full w-full items-center justify-center rounded-full bg-[#191f27] text-lg font-semibold text-gray-100">
                   {userInitial}
                 </div>
               )}
@@ -110,7 +110,7 @@ export default function MainDashboard({
           {/* Calendar */}
           <div>
             {loading ? (
-              <div className="bg-gray-800 rounded-lg p-4 h-96 flex items-center justify-center">
+              <div className="panel flex h-96 items-center justify-center p-4">
                 <p className="text-gray-400">Loading calendar...</p>
               </div>
             ) : (
@@ -139,14 +139,14 @@ export default function MainDashboard({
         <div className="flex gap-4 justify-center">
           <button
             onClick={() => router.push('/plan')}
-            className="flex items-center gap-2 px-6 py-3 rounded-lg bg-[#d6ff43] text-gray-900 font-semibold hover:bg-yellow-400 transition-colors"
+            className="flex items-center gap-2 rounded-xl bg-[#d6ff43] px-6 py-3 font-semibold text-gray-900 transition-colors hover:bg-[#c4ec39]"
           >
             <Plus size={20} />
             Generar Plan
           </button>
           <button
             onClick={() => setShowNewCycleModal(true)}
-            className="flex items-center gap-2 px-6 py-3 rounded-lg bg-green-500 text-white font-semibold hover:bg-green-600 transition-colors"
+            className="panel-soft flex items-center gap-2 rounded-xl px-6 py-3 font-semibold text-white transition-colors hover:text-[#d6ff43]"
           >
             <Plus size={20} />
             Nuevo Ciclo

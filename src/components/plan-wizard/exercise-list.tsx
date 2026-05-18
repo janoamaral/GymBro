@@ -4,16 +4,16 @@ import { Trash2, Edit2 } from 'lucide-react';
 import { Exercise } from './exercise-form-modal';
 
 interface ExerciseListProps {
-  exercises: Exercise[];
-  onEdit: (index: number) => void;
-  onDelete: (index: number) => void;
+  readonly exercises: Exercise[];
+  readonly onEdit: (index: number) => void;
+  readonly onDelete: (index: number) => void;
 }
 
 export function ExerciseList({
   exercises,
   onEdit,
   onDelete,
-}: ExerciseListProps) {
+}: Readonly<ExerciseListProps>) {
   const formatNon531Summary = (exercise: Exercise) => {
     const sets = exercise.sets ??
       (exercise.weight && exercise.reps ? [{ weight: exercise.weight, reps: exercise.reps }] : []);
@@ -47,8 +47,8 @@ export function ExerciseList({
     <div className="space-y-2">
       {exercises.map((exercise, index) => (
         <div
-          key={index}
-          className="bg-gray-700 rounded p-4 flex items-center justify-between"
+          key={`${exercise.id ?? exercise.name}-${exercise.method}-${exercise.liftId ?? 'custom'}-${exercise.unit}-${exercise.oneRm ?? 'n/a'}-${exercise.sets?.length ?? 0}`}
+          className="panel-soft flex items-center justify-between rounded-xl p-4"
         >
           <div>
             <p className="font-semibold text-white">{exercise.name}</p>
@@ -61,14 +61,14 @@ export function ExerciseList({
           <div className="flex gap-2">
             <button
               onClick={() => onEdit(index)}
-              className="p-2 hover:bg-gray-600 rounded transition-colors"
+              className="btn-dark p-2"
               aria-label="Edit exercise"
             >
               <Edit2 size={18} className="text-blue-400" />
             </button>
             <button
               onClick={() => onDelete(index)}
-              className="p-2 hover:bg-gray-600 rounded transition-colors"
+              className="btn-dark p-2"
               aria-label="Delete exercise"
             >
               <Trash2 size={18} className="text-red-400" />
