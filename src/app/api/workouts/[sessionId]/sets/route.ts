@@ -57,16 +57,17 @@ export async function POST(
 
     const existingSetsCount = await db.exerciseSet.count({ where: { sessionId } });
 
-    const shouldCalculatePlateLoad =
-      payload.barbellWeight !== undefined && payload.targetWeight >= payload.barbellWeight;
+    let plateCalc: ReturnType<typeof calculatePlateLoadPerSide> | null = null;
+    let barbellWeightForSet: number | null = null;
 
-    const plateCalc = shouldCalculatePlateLoad
-      ? calculatePlateLoadPerSide({
-          targetWeight: payload.targetWeight,
-          barbellWeight: payload.barbellWeight,
-          unit: payload.unit,
-        })
-      : null;
+    if (payload.barbellWeight !== undefined && payload.targetWeight >= payload.barbellWeight) {
+      barbellWeightForSet = payload.barbellWeight;
+      plateCalc = calculatePlateLoadPerSide({
+        targetWeight: payload.targetWeight,
+        barbellWeight: payload.barbellWeight,
+        unit: payload.unit,
+      });
+    }
 
     const set = await db.exerciseSet.create({
       data: {
@@ -78,7 +79,7 @@ export async function POST(
         percentage: payload.percentage,
         isAmrap: payload.isAmrap ?? false,
         targetWeight: payload.targetWeight,
-        barbellWeight: shouldCalculatePlateLoad ? payload.barbellWeight : null,
+        barbellWeight: barbellWeightForSet,
         perSideWeight: plateCalc?.roundedPerSide ?? null,
         unit: payload.unit,
       },
