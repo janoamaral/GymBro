@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CalendarDays, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Modal } from '@/components/ui/modal';
+import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
+
+const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
 
 interface Set {
   id: string;
@@ -107,6 +110,7 @@ export default function WorkoutDayPage() {
   // Transicion simple: fade out al hacer click
   const [transitioning, setTransitioning] = useState(false);
   const [targetRoute, setTargetRoute] = useState<string | null>(null);
+  const [transitioningExerciseId, setTransitioningExerciseId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSessionsForDay = async () => {
@@ -243,12 +247,31 @@ export default function WorkoutDayPage() {
     exerciseGroup.sets.some((set) => !set.isDone)
   );
 
+  const handleExerciseOpen = (
+    event: MouseEvent<HTMLButtonElement>,
+    exerciseGroup: ExerciseGroup
+  ) => {
+    try {
+      sessionStorage.setItem(
+        SHARED_EXERCISE_TITLE_KEY,
+        JSON.stringify({
+          date,
+          exerciseId: exerciseGroup.exerciseId,
+          title: exerciseGroup.exerciseName,
+        })
+      );
+    } catch {
+      // Ignora errores de storage para no bloquear navegacion.
+    }
+
+    event.currentTarget.blur();
+    setTransitioningExerciseId(exerciseGroup.exerciseId);
+    setTransitioning(true);
+    setTargetRoute(`/workout/${date}/${exerciseGroup.exerciseId}`);
+  };
+
   if (loading) {
-    return (
-      <main className="app-canvas min-h-full px-4 py-8">
-        <p className="text-gray-400">Loading...</p>
-      </main>
-    );
+    return <FullscreenLoader label="Cargando workout..." />;
   }
 
   if (error) {
@@ -323,18 +346,21 @@ export default function WorkoutDayPage() {
         <div className="flex flex-col gap-6">
           {exercises.map((exerciseGroup, idx) => {
             const isNext = idx === nextExerciseIndex;
+            const isSelected = transitioningExerciseId === exerciseGroup.exerciseId;
+            const baseCardClass = isNext
+              ? 'relative rounded-2xl bg-accent text-[#101010] shadow-lg p-6 text-left transition-all min-h-25'
+              : 'panel-soft p-6 text-white text-left transition-all min-h-25';
+            let selectedCardClass = '';
+            if (isSelected && isNext) {
+              selectedCardClass = 'scale-[0.98] -translate-y-1';
+            } else if (isSelected) {
+              selectedCardClass = 'scale-[0.98] -translate-y-1 opacity-80';
+            }
             return (
               <button
                 key={exerciseGroup.exerciseId}
-                onClick={() => {
-                  setTransitioning(true);
-                  setTargetRoute(`/workout/${date}/${exerciseGroup.exerciseId}`);
-                }}
-                className={
-                  isNext
-                    ? 'relative rounded-2xl bg-accent text-[#101010] shadow-lg p-6 text-left transition-all min-h-25'
-                    : 'panel-soft p-6 text-white text-left min-h-25'
-                }
+                onClick={(event) => handleExerciseOpen(event, exerciseGroup)}
+                className={`${baseCardClass} ${selectedCardClass}`}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className={isNext ? 'text-xs font-heading uppercase tracking-widest opacity-70' : 'text-xs font-heading uppercase tracking-widest text-gray-400'}>
@@ -344,7 +370,10 @@ export default function WorkoutDayPage() {
                     {exerciseGroup.sets.length} set{exerciseGroup.sets.length > 1 ? 's' : ''}
                   </span>
                 </div>
-                <span className={isNext ? 'text-2xl font-black font-heading' : 'text-xl font-bold font-heading'}>
+                <span
+                  data-exercise-title
+                  className={`${isNext ? 'text-2xl font-black font-heading' : 'text-xl font-bold font-heading'} transition-all duration-200 ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-8 scale-110 opacity-70' : ''}`}
+                >
                   {exerciseGroup.exerciseName}
                 </span>
               </button>

@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Calculator } from 'lucide-react';
 import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
+import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
+
+const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
 
 interface Set {
   id: string;
@@ -58,6 +61,8 @@ export default function ExerciseDetailPage() {
   const [exerciseOneRm, setExerciseOneRm] = useState<number | null>(null);
   const [exerciseLiftId, setExerciseLiftId] = useState<'SQ' | 'DL' | 'BP' | 'OHP' | null>(null);
   const [oneRmUnit, setOneRmUnit] = useState<'kg' | 'lb' | null>(null);
+  const [isTitleEntering, setIsTitleEntering] = useState(false);
+  const [entryTitle, setEntryTitle] = useState<string | null>(null);
 
   const clearExerciseProfile = () => {
     setExerciseOneRm(null);
@@ -123,6 +128,41 @@ export default function ExerciseDetailPage() {
     fetchExerciseSets();
   }, [date, exerciseId]);
 
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    try {
+      const rawTransitionData = sessionStorage.getItem(SHARED_EXERCISE_TITLE_KEY);
+      if (!rawTransitionData) {
+        return;
+      }
+
+      sessionStorage.removeItem(SHARED_EXERCISE_TITLE_KEY);
+      const transitionData = JSON.parse(rawTransitionData) as {
+        date: string;
+        exerciseId: string;
+        title: string;
+      };
+
+      if (transitionData.date !== date || transitionData.exerciseId !== exerciseId) {
+        return;
+      }
+
+      setEntryTitle(transitionData.title);
+      setIsTitleEntering(true);
+
+      const rafId = requestAnimationFrame(() => {
+        setIsTitleEntering(false);
+      });
+
+      return () => cancelAnimationFrame(rafId);
+    } catch {
+      // Ignora errores de parseo para no romper la navegacion.
+    }
+  }, [loading, date, exerciseId]);
+
   const handleSetFeelingChange = async (setId: string, score: number) => {
     const set = sets.find((s) => s.id === setId);
     if (!set) return;
@@ -181,14 +221,10 @@ export default function ExerciseDetailPage() {
     setShowCalculator(true);
   };
 
-  const exerciseName = sets.length > 0 ? sets[0].exercise.name : 'Exercise';
+  const exerciseName = sets.length > 0 ? sets[0].exercise.name : entryTitle ?? 'Exercise';
 
   if (loading) {
-    return (
-      <main className="app-canvas min-h-full px-4 py-8">
-        <p className="text-gray-400">Loading...</p>
-      </main>
-    );
+    return <FullscreenLoader label="Cargando ejercicio..." />;
   }
 
   if (error) {
@@ -216,7 +252,9 @@ export default function ExerciseDetailPage() {
             <ArrowLeft size={24} className="text-white" />
           </button>
           <div>
-            <h1 className="text-4xl sm:text-5xl font-heading font-black leading-tight text-white drop-shadow-md uppercase">
+            <h1
+              className={`text-4xl sm:text-5xl font-heading font-black leading-tight text-white drop-shadow-md uppercase transition-all duration-300 ease-out ${isTitleEntering ? 'translate-y-10 scale-90 opacity-50' : 'translate-y-0 scale-100 opacity-100'}`}
+            >
               {exerciseName}
             </h1>
             <p className="text-lg text-gray-400 font-heading uppercase tracking-wider">
@@ -247,10 +285,9 @@ export default function ExerciseDetailPage() {
                 key={set.id}
                 className={
                   isNext
-                    ? 'relative rounded-2xl bg-[var(--accent)] text-[#101010] shadow-lg p-6 transition-all'
-                    : 'panel-soft p-6 text-white'
+                    ? 'relative rounded-2xl bg-accent text-[#101010] shadow-lg p-6 transition-all min-h-30'
+                    : 'panel-soft p-6 text-white min-h-30'
                 }
-                style={{ minHeight: '120px' }}
               >
                 {/* Info principal */}
                 <div className="flex items-center justify-between mb-2">
@@ -309,7 +346,7 @@ export default function ExerciseDetailPage() {
                   onClick={() => handleOpenCalculator(Number(set.targetWeight), set.unit as 'kg' | 'lb')}
                   className={
                     isNext
-                      ? 'btn-dark flex w-full items-center justify-center gap-2 px-4 py-2 bg-[#101010] text-[var(--accent)] border-none font-bold mt-2'
+                      ? 'btn-dark flex w-full items-center justify-center gap-2 px-4 py-2 bg-[#101010] text-accent border-none font-bold mt-2'
                       : 'btn-dark flex w-full items-center justify-center gap-2 px-4 py-2 mt-2'
                   }
                 >
