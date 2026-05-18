@@ -10,6 +10,15 @@ const updateSettingsSchema = z.object({
   avatarUrl: z.string().trim().max(500).optional(),
 });
 
+function isValidAbsoluteUrl(value: string): boolean {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function GET() {
   try {
     const user = await getOrCreateCurrentUser();
@@ -51,7 +60,7 @@ export async function PUT(request: Request) {
       nextAvatarUrl = payload.avatarUrl.length === 0 ? null : payload.avatarUrl;
     }
 
-    if (nextAvatarUrl !== null && nextAvatarUrl !== undefined && !URL.canParse(nextAvatarUrl)) {
+    if (nextAvatarUrl !== null && nextAvatarUrl !== undefined && !isValidAbsoluteUrl(nextAvatarUrl)) {
       return NextResponse.json(
         { error: "INVALID_PAYLOAD", issues: [{ path: ["avatarUrl"], message: "Invalid URL" }] },
         { status: 400 },
