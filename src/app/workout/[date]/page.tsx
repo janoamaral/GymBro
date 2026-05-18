@@ -12,6 +12,7 @@ interface Set {
   repsTarget: number;
   targetWeight: number;
   unit: string;
+  isDone?: boolean;
   exercise: {
     id: string;
     name: string;
@@ -78,23 +79,11 @@ const groupSetsByExercise = (sessions: SessionWithSets[]): ExerciseGroup[] => {
   return Array.from(grouped.values());
 };
 
+
 export default function WorkoutDayPage() {
   const router = useRouter();
   const params = useParams();
   const date = params.date as string;
-
-  const [yearPart, monthPart, dayPart] = date.split('-').map(Number);
-  const hasValidDateParts =
-    Number.isInteger(yearPart) &&
-    Number.isInteger(monthPart) &&
-    Number.isInteger(dayPart) &&
-    monthPart >= 1 &&
-    monthPart <= 12 &&
-    dayPart >= 1 &&
-    dayPart <= 31;
-  const displayDate = hasValidDateParts
-    ? new Date(Date.UTC(yearPart, monthPart - 1, dayPart))
-    : null;
 
   const [exercises, setExercises] = useState<ExerciseGroup[]>([]);
   const [sessions, setSessions] = useState<SessionWithSets[]>([]);
@@ -115,6 +104,10 @@ export default function WorkoutDayPage() {
   const [rescheduleReason, setRescheduleReason] = useState('');
   const [rescheduling, setRescheduling] = useState(false);
 
+  // Transicion simple: fade out al hacer click
+  const [transitioning, setTransitioning] = useState(false);
+  const [targetRoute, setTargetRoute] = useState<string | null>(null);
+
   useEffect(() => {
     const fetchSessionsForDay = async () => {
       try {
@@ -122,7 +115,6 @@ export default function WorkoutDayPage() {
         if (!res.ok) throw new Error('Failed to fetch sessions');
 
         const data = await res.json();
-
         const fetchedSessions = data.sessions as SessionWithSets[];
         setSessions(fetchedSessions);
         setExercises(groupSetsByExercise(fetchedSessions));
@@ -135,6 +127,31 @@ export default function WorkoutDayPage() {
 
     fetchSessionsForDay();
   }, [date]);
+
+  useEffect(() => {
+    if (!transitioning || !targetRoute) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      router.push(targetRoute);
+    }, 220);
+
+    return () => clearTimeout(timeout);
+  }, [transitioning, targetRoute, router]);
+
+  const [yearPart, monthPart, dayPart] = date.split('-').map(Number);
+  const hasValidDateParts =
+    Number.isInteger(yearPart) &&
+    Number.isInteger(monthPart) &&
+    Number.isInteger(dayPart) &&
+    monthPart >= 1 &&
+    monthPart <= 12 &&
+    dayPart >= 1 &&
+    dayPart <= 31;
+  const displayDate = hasValidDateParts
+    ? new Date(Date.UTC(yearPart, monthPart - 1, dayPart))
+    : null;
 
   const sessionIds = sessions.map((session) => session.id);
 
@@ -222,6 +239,10 @@ export default function WorkoutDayPage() {
     }
   };
 
+  const nextExerciseIndex = exercises.findIndex((exerciseGroup) =>
+    exerciseGroup.sets.some((set) => !set.isDone)
+  );
+
   if (loading) {
     return (
       <main className="app-canvas min-h-full px-4 py-8">
@@ -239,51 +260,55 @@ export default function WorkoutDayPage() {
   }
 
   return (
-    <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.back()}
-              title="Volver"
-              aria-label="Volver"
-              className="btn-dark p-2"
-            >
-              <ArrowLeft size={24} className="text-white" />
-            </button>
-            <div>
-              <h1 className="text-4xl font-bold text-white">Workout</h1>
-              <p className="text-gray-400">
-                {displayDate
-                  ? displayDate.toLocaleDateString('es-ES', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      timeZone: 'UTC',
-                    })
-                  : date}
-              </p>
-            </div>
+    <main className={`app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8 transition-opacity duration-200 ${transitioning ? 'opacity-0' : 'opacity-100'}`}>
+      <div className="max-w-md mx-auto">
+        {/* Header tipo portada */}
+        <div className="mb-10 flex items-center gap-4">
+          <button
+            onClick={() => router.back()}
+            title="Volver"
+            aria-label="Volver"
+            className="btn-dark p-2"
+          >
+            <ArrowLeft size={24} className="text-white" />
+          </button>
+          <div>
+            <h1 className="text-4xl sm:text-5xl font-heading font-black leading-tight text-white drop-shadow-md uppercase">
+              Workout
+            </h1>
+            <p className="text-lg text-gray-400 font-heading uppercase tracking-wider">
+              {displayDate
+                ? displayDate.toLocaleDateString('es-ES', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    timeZone: 'UTC',
+                  })
+                : date}
+            </p>
           </div>
 
+          {/* Botón reprogramar solo icono */}
           <button
             onClick={() => setShowRescheduleModal(true)}
             disabled={sessionIds.length === 0 || rescheduling}
-            className="flex items-center gap-2 rounded bg-sky-500/20 px-4 py-2 text-sm font-medium text-sky-100 transition-colors hover:bg-sky-500/30 disabled:opacity-50"
+            className="btn-dark p-2 ml-auto"
+            title="Reprogramar día"
+            aria-label="Reprogramar día"
           >
-            <CalendarDays size={16} />
-            {rescheduling ? 'Reprogramando...' : 'Reprogramar día'}
+            <CalendarDays size={22} className="text-sky-300" />
           </button>
 
+          {/* Botón eliminar solo icono */}
           <button
             onClick={() => setShowDeleteConfirm(true)}
             disabled={sessionIds.length === 0 || deleting}
-            className="flex items-center gap-2 rounded bg-red-500/20 px-4 py-2 text-sm font-medium text-red-200 transition-colors hover:bg-red-500/30 disabled:opacity-50"
+            className="btn-dark p-2"
+            title="Eliminar workout"
+            aria-label="Eliminar workout"
           >
-            <Trash2 size={16} />
-            {deleting ? 'Eliminando...' : 'Eliminar workout'}
+            <Trash2 size={22} className="text-red-400" />
           </button>
         </div>
 
@@ -293,22 +318,38 @@ export default function WorkoutDayPage() {
           </div>
         )}
 
-        {/* Exercises List */}
-        <div className="space-y-4">
-          {exercises.map((exerciseGroup) => (
-            <button
-              key={exerciseGroup.exerciseId}
-              onClick={() => router.push(`/workout/${date}/${exerciseGroup.exerciseId}`)}
-              className="panel w-full p-4 text-left transition-colors"
-            >
-              <h3 className="text-xl font-semibold text-white">
-                {exerciseGroup.exerciseName}
-              </h3>
-              <p className="mt-2 text-gray-400">
-                {exerciseGroup.sets.length} set{exerciseGroup.sets.length > 1 ? 's' : ''}
-              </p>
-            </button>
-          ))}
+
+        {/* Lista de ejercicios tipo tarjetas */}
+        <div className="flex flex-col gap-6">
+          {exercises.map((exerciseGroup, idx) => {
+            const isNext = idx === nextExerciseIndex;
+            return (
+              <button
+                key={exerciseGroup.exerciseId}
+                onClick={() => {
+                  setTransitioning(true);
+                  setTargetRoute(`/workout/${date}/${exerciseGroup.exerciseId}`);
+                }}
+                className={
+                  isNext
+                    ? 'relative rounded-2xl bg-accent text-[#101010] shadow-lg p-6 text-left transition-all min-h-25'
+                    : 'panel-soft p-6 text-white text-left min-h-25'
+                }
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className={isNext ? 'text-xs font-heading uppercase tracking-widest opacity-70' : 'text-xs font-heading uppercase tracking-widest text-gray-400'}>
+                    Ejercicio
+                  </span>
+                  <span className={isNext ? 'text-xs font-bold text-[#101010]' : 'text-xs text-gray-400'}>
+                    {exerciseGroup.sets.length} set{exerciseGroup.sets.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                <span className={isNext ? 'text-2xl font-black font-heading' : 'text-xl font-bold font-heading'}>
+                  {exerciseGroup.exerciseName}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {exercises.length === 0 && (

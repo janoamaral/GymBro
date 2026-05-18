@@ -199,11 +199,14 @@ export default function ExerciseDetailPage() {
     );
   }
 
+  // Encuentra el primer set no completado (próximo a realizar)
+  const nextSetIndex = sets.findIndex((set) => !set.isDone);
+
   return (
     <main className="app-canvas min-h-full px-4 py-8 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 flex items-center gap-4">
+      <div className="max-w-md mx-auto">
+        {/* Header tipo portada */}
+        <div className="mb-10 flex items-center gap-4">
           <button
             onClick={() => router.back()}
             title="Volver"
@@ -213,8 +216,10 @@ export default function ExerciseDetailPage() {
             <ArrowLeft size={24} className="text-white" />
           </button>
           <div>
-            <h1 className="text-4xl font-bold text-white">{exerciseName}</h1>
-            <p className="text-gray-400">
+            <h1 className="text-4xl sm:text-5xl font-heading font-black leading-tight text-white drop-shadow-md uppercase">
+              {exerciseName}
+            </h1>
+            <p className="text-lg text-gray-400 font-heading uppercase tracking-wider">
               {displayDate
                 ? displayDate.toLocaleDateString('es-ES', {
                     weekday: 'long',
@@ -226,76 +231,94 @@ export default function ExerciseDetailPage() {
                 : date}
             </p>
             {exerciseOneRm !== null && oneRmUnit && (
-              <p className="text-sm text-gray-300 mt-1">
+              <p className="text-xs text-gray-300 mt-1 font-mono">
                 1RM ({exerciseLiftId}): {exerciseOneRm} {oneRmUnit}
               </p>
             )}
           </div>
         </div>
 
-        {/* Sets List */}
-        <div className="space-y-4">
-          {sets.map((set) => (
-            <div
-              key={set.id}
-              className="panel space-y-4 p-4"
-            >
-              {/* Set Header */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">
-                    Set {set.setNumber}
-                  </h3>
-                  <p className="text-gray-400">
-                    {set.repsTarget} reps @ {set.targetWeight} {set.unit}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={set.isDone}
-                    onChange={() => handleToggleDone(set.id, set.isDone)}
-                    title={`Marcar set ${set.setNumber} como completado`}
-                    aria-label={`Marcar set ${set.setNumber} como completado`}
-                    className="w-6 h-6 rounded border-2 border-gray-600 checked:bg-[#d6ff43] checked:border-[#d6ff43] cursor-pointer"
-                  />
-                  <span className="text-sm text-gray-400">Done</span>
-                </div>
-              </div>
-
-              {/* Feeling Slider */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Feeling: {set.setFeelingScore || '—'}
-                </label>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-gray-400 w-14">Muy cansado</span>
-                  <input
-                    type="range"
-                    min="1"
-                    max="5"
-                    value={set.setFeelingScore || 3}
-                    onChange={(e) =>
-                      handleSetFeelingChange(set.id, Number.parseInt(e.target.value, 10))
-                    }
-                    title={`Sensación del set ${set.setNumber}`}
-                    aria-label={`Sensación del set ${set.setNumber}`}
-                    className="flex-1 h-2 appearance-none rounded-lg bg-[#1f2630] accent-[#d6ff43] cursor-pointer"
-                  />
-                  <span className="text-xs text-gray-400 w-20">Lightweight 💪</span>
-                </div>
-              </div>
-
-              {/* Plate Calculator Button */}
-              <button
-                onClick={() => handleOpenCalculator(Number(set.targetWeight), set.unit as 'kg' | 'lb')}
-                className="btn-dark flex w-full items-center justify-center gap-2 px-4 py-2"
+        {/* Lista de sets tipo tarjetas */}
+        <div className="flex flex-col gap-6">
+          {sets.map((set, idx) => {
+            const isNext = idx === nextSetIndex;
+            return (
+              <div
+                key={set.id}
+                className={
+                  isNext
+                    ? 'relative rounded-2xl bg-[var(--accent)] text-[#101010] shadow-lg p-6 transition-all'
+                    : 'panel-soft p-6 text-white'
+                }
+                style={{ minHeight: '120px' }}
               >
-                <Calculator size={18} />
-                Calcular Pesos
-              </button>
-            </div>
-          ))}
+                {/* Info principal */}
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <span className="block text-xs font-heading uppercase tracking-widest opacity-70">
+                      Set {set.setNumber}
+                    </span>
+                    <span className={isNext ? 'text-2xl font-black font-heading' : 'text-xl font-bold font-heading'}>
+                      {set.repsTarget} reps @ {set.targetWeight} {set.unit}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <input
+                      type="checkbox"
+                      checked={set.isDone}
+                      onChange={() => handleToggleDone(set.id, set.isDone)}
+                      title={`Marcar set ${set.setNumber} como completado`}
+                      aria-label={`Marcar set ${set.setNumber} como completado`}
+                      className={
+                        isNext
+                          ? 'w-7 h-7 rounded border-2 border-[#b6d900] checked:bg-[#101010] checked:border-[#101010] accent-[#101010] cursor-pointer'
+                          : 'w-6 h-6 rounded border-2 border-gray-600 checked:bg-[#d6ff43] checked:border-[#d6ff43] cursor-pointer'
+                      }
+                    />
+                    <span className={isNext ? 'text-xs text-[#101010] font-bold' : 'text-xs text-gray-400'}>
+                      {set.isDone ? 'Completado' : 'Pendiente'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Feeling Slider */}
+                <div className="mb-2">
+                  <label className={isNext ? 'block text-xs font-bold text-[#101010] mb-1' : 'block text-xs font-medium text-gray-300 mb-1'}>
+                    Feeling: {set.setFeelingScore || '—'}
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <span className={isNext ? 'text-xs text-[#101010] w-14' : 'text-xs text-gray-400 w-14'}>Muy cansado</span>
+                    <input
+                      type="range"
+                      min="1"
+                      max="5"
+                      value={set.setFeelingScore || 3}
+                      onChange={(e) =>
+                        handleSetFeelingChange(set.id, Number.parseInt(e.target.value, 10))
+                      }
+                      title={`Sensación del set ${set.setNumber}`}
+                      aria-label={`Sensación del set ${set.setNumber}`}
+                      className={isNext ? 'flex-1 h-2 appearance-none rounded-lg bg-[#eaffb0] accent-[#101010] cursor-pointer' : 'flex-1 h-2 appearance-none rounded-lg bg-[#1f2630] accent-[#d6ff43] cursor-pointer'}
+                    />
+                    <span className={isNext ? 'text-xs text-[#101010] w-20' : 'text-xs text-gray-400 w-20'}>Lightweight 💪</span>
+                  </div>
+                </div>
+
+                {/* Botón de calcular pesos */}
+                <button
+                  onClick={() => handleOpenCalculator(Number(set.targetWeight), set.unit as 'kg' | 'lb')}
+                  className={
+                    isNext
+                      ? 'btn-dark flex w-full items-center justify-center gap-2 px-4 py-2 bg-[#101010] text-[var(--accent)] border-none font-bold mt-2'
+                      : 'btn-dark flex w-full items-center justify-center gap-2 px-4 py-2 mt-2'
+                  }
+                >
+                  <Calculator size={18} />
+                  Calcular Pesos
+                </button>
+              </div>
+            );
+          })}
         </div>
 
         {sets.length === 0 && (
