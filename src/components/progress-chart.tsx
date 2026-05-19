@@ -145,7 +145,7 @@ export function ProgressChart() {
                   currentLift === liftId
                     ? 'border-emerald-300/60 bg-emerald-400/20 text-emerald-200'
                     : 'border-white/10 bg-black/20 text-gray-300 hover:border-white/25'
-                }`}
+                } focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0`}
               >
                 {currentLift}
               </button>
@@ -168,7 +168,7 @@ export function ProgressChart() {
                   rangeOption.key === range
                     ? 'bg-white/16 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]'
                     : 'text-gray-400 hover:text-gray-200'
-                }`}
+                } focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0`}
               >
                 {rangeOption.label}
               </button>
