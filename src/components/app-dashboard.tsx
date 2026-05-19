@@ -17,7 +17,7 @@ import {
 } from "@/lib/training/plate-calculator";
 import { formatDualWeight, type WeightUnit } from "@/lib/units/conversion";
 
-type LiftId = "SQ" | "DL" | "BP" | "OHP";
+type LiftId = "SQ" | "DL" | "BP";
 type AssistanceVariant = "NONE" | "BBB" | "FSL";
 
 type WeekNumber = 1 | 2 | 3 | 4;
@@ -121,7 +121,6 @@ export default function AppDashboard({ userName, userPicture }: Props) {
     SQ: undefined,
     DL: undefined,
     BP: undefined,
-    OHP: undefined,
   });
 
   const calculation = useMemo(() => {
@@ -186,7 +185,6 @@ export default function AppDashboard({ userName, userPicture }: Props) {
       SQ: undefined,
       DL: undefined,
       BP: undefined,
-      OHP: undefined,
     };
 
     for (const profile of data.profiles as Profile531[]) {
@@ -829,7 +827,6 @@ export default function AppDashboard({ userName, userPicture }: Props) {
               <option value="SQ">SQ</option>
               <option value="DL">DL</option>
               <option value="BP">BP</option>
-              <option value="OHP">OHP</option>
             </select>
           </label>
 
@@ -1012,6 +1009,8 @@ export default function AppDashboard({ userName, userPicture }: Props) {
                       day: "2-digit",
                     }),
                   }))}
+                  accessibilityLayer={false}
+                  tabIndex={-1}
                 >
                   <CartesianGrid stroke="#2b2b2b" strokeDasharray="3 3" />
                   <XAxis dataKey="label" stroke="#8b8b8b" />

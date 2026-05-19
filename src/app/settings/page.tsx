@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-type LiftId = 'SQ' | 'DL' | 'BP' | 'OHP';
+type LiftId = 'SQ' | 'DL' | 'BP';
 
 type TrainingProfile = {
   liftId: LiftId;
@@ -18,6 +18,8 @@ export default function SettingsPage() {
   const [cycleIncrement531, setCycleIncrement531] = useState(5);
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [defaultUnit, setDefaultUnit] = useState<'kg' | 'lb'>('kg');
+  const [competitionSex, setCompetitionSex] = useState<'male' | 'female'>('male');
   const [profiles, setProfiles] = useState<TrainingProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -45,6 +47,8 @@ export default function SettingsPage() {
           setCycleIncrement531(settingsData.settings.cycleIncrement531);
           setDisplayName(settingsData.settings.displayName ?? '');
           setAvatarUrl(settingsData.settings.avatarUrl ?? '');
+          setDefaultUnit(settingsData.settings.defaultUnit === 'lb' ? 'lb' : 'kg');
+          setCompetitionSex(settingsData.settings.competitionSex === 'female' ? 'female' : 'male');
         }
 
         if (Array.isArray(profileData.profiles)) {
@@ -88,6 +92,8 @@ export default function SettingsPage() {
             cycleIncrement531,
             displayName: displayName.trim(),
             avatarUrl: avatarUrl.trim(),
+            defaultUnit,
+            competitionSex,
           }),
         }),
       ];
@@ -232,6 +238,34 @@ export default function SettingsPage() {
                 placeholder="https://..."
                 className="field-dark"
               />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label htmlFor="default-unit" className="block text-sm font-medium text-gray-300">
+                  <span>Unidad por defecto</span>
+                  <select
+                    id="default-unit"
+                    value={defaultUnit}
+                    onChange={(e) => setDefaultUnit(e.target.value as 'kg' | 'lb')}
+                    className="field-dark mt-1"
+                  >
+                    <option value="kg">kg</option>
+                    <option value="lb">lb</option>
+                  </select>
+                </label>
+
+                <label htmlFor="competition-sex" className="block text-sm font-medium text-gray-300">
+                  <span>Sexo competición</span>
+                  <select
+                    id="competition-sex"
+                    value={competitionSex}
+                    onChange={(e) => setCompetitionSex(e.target.value as 'male' | 'female')}
+                    className="field-dark mt-1"
+                  >
+                    <option value="male">Masculino</option>
+                    <option value="female">Femenino</option>
+                  </select>
+                </label>
+              </div>
             </div>
           </div>
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Bebas_Neue, Rajdhani } from "next/font/google";
 import "./globals.css";
 import { SharedElementProvider } from "@/components/ui/shared-element-provider";
+import { GlobalHamburger } from "@/components/global-hamburger";
 
 const heading = Bebas_Neue({
   variable: "--font-heading",
@@ -32,6 +33,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <SharedElementProvider>
+          <GlobalHamburger />
           {children}
         </SharedElementProvider>
       </body>

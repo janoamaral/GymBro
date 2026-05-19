@@ -5,7 +5,7 @@ import { getOrCreateCurrentUser } from "@/lib/current-user";
 import { UnauthorizedError } from "@/lib/http-errors";
 
 const planSchema = z.object({
-  liftId: z.enum(["SQ", "DL", "BP", "OHP"]),
+  liftId: z.enum(["SQ", "DL", "BP"]),
   oneRm: z.number().positive(),
   unit: z.enum(["kg", "lb"]),
   weekNumber: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),

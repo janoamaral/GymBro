@@ -10,19 +10,18 @@ interface CalendarProps {
   readonly onMonthChange: (year: number, month: number) => void;
 }
 
-type LiftMarker = "BP" | "DL" | "SQ" | "OHP";
+type LiftMarker = "BP" | "DL" | "SQ";
 
-const LIFT_ORDER: LiftMarker[] = ["BP", "DL", "SQ", "OHP"];
+const LIFT_ORDER: LiftMarker[] = ["BP", "DL", "SQ"];
 
 const LIFT_COLOR_CLASS: Record<LiftMarker, string> = {
   BP: 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.95)]',
   DL: 'bg-violet-400 shadow-[0_0_10px_rgba(167,139,250,0.95)]',
   SQ: 'bg-fuchsia-400 shadow-[0_0_10px_rgba(232,121,249,0.95)]',
-  OHP: 'bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.95)]',
 };
 
 function isLiftMarker(value: string): value is LiftMarker {
-  return value === "BP" || value === "DL" || value === "SQ" || value === "OHP";
+  return value === "BP" || value === "DL" || value === "SQ";
 }
 
 export function Calendar({

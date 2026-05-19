@@ -27,7 +27,7 @@ const setSchema = z.object({
 
 const exerciseSchema = z.object({
   name: z.string().min(1),
-  liftId: z.enum(["SQ", "DL", "BP", "OHP"]).optional(),
+  liftId: z.enum(["SQ", "DL", "BP"]).optional(),
   method: z.enum(["531", "none"]),
   oneRm: z.number().positive().optional(),
   sets: z.array(setSchema).min(1).optional(),

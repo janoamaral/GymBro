@@ -6,7 +6,7 @@ import { getOrCreateCurrentUser } from "@/lib/current-user";
 import { UnauthorizedError } from "@/lib/http-errors";
 
 const createSetSchema = z.object({
-  liftId: z.enum(["SQ", "DL", "BP", "OHP"]).optional(),
+  liftId: z.enum(["SQ", "DL", "BP"]).optional(),
   exerciseId: z.string().optional(),
   exerciseName: z.string().min(1).max(120).optional(),
   repsTarget: z.number().int().min(1).max(100),

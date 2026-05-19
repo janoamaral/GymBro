@@ -22,6 +22,9 @@ dependencies:
   pg:
     specifier: ^8.20.0
     version: 8.20.0
+  powerlifting-formulas:
+    specifier: ^0.2.3
+    version: 0.2.3
   prisma:
     specifier: ^7.8.0
     version: 7.8.0(@types/react-dom@19.0.0)(@types/react@19.0.0)(react-dom@19.2.4)(react@19.2.4)(typescript@5.0.2)
@@ -4109,6 +4112,11 @@ packages:
   /postgres@3.4.7:
     resolution: {integrity: sha512-Jtc2612XINuBjIl/QTWsV5UvE8UHuNblcO3vVADSrKsrc6RqGX6lOW1cEo3CM2v0XG4Nat8nI+YM7/f26VxXLw==}
     engines: {node: '>=12'}
+    dev: false
+
+  /powerlifting-formulas@0.2.3:
+    resolution: {integrity: sha512-t7sFRk1svnnqxAw5OGu91eXCilZnE2iKaF3dneMFRQFqAQN1sB4Q2OM+afpHwS4jx1rVs3WfrlCnjMNC6OJNIw==}
+    engines: {node: '>=14.17'}
     dev: false
 
   /prelude-ls@1.2.1:

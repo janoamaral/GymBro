@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { Calendar } from '@/components/calendar';
+import { MeetCoefficientsCard } from '@/components/meet-coefficients-card';
 import { ProgressChart } from '@/components/progress-chart';
 import { NextWorkout } from '@/components/next-workout';
 import { NewCycleModal } from '@/components/new-cycle-modal';
+import { VolumeByLiftCard } from '@/components/volume-by-lift-card';
 
 interface MainDashboardProps {
   readonly userName: string;
@@ -100,7 +102,7 @@ export default function MainDashboard({
               <h1 className="mt-1 text-xl font-bold text-white">{userName}</h1>
             </div>
           </div>
-          <p className="pt-1 text-xs tracking-[0.3em] text-gray-400">GymBro</p>
+          <div className="pt-1" />
         </div>
       </div>
 
@@ -134,6 +136,14 @@ export default function MainDashboard({
         {/* Progress Chart */}
         <div>
           <ProgressChart />
+        </div>
+
+        <div>
+          <VolumeByLiftCard />
+        </div>
+
+        <div>
+          <MeetCoefficientsCard />
         </div>
 
         {/* Action Buttons */}

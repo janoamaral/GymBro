@@ -18,7 +18,7 @@ interface ProgressPoint {
   unit: 'kg' | 'lb';
 }
 
-type LiftId = 'BP' | 'SQ' | 'DL' | 'OHP';
+type LiftId = 'BP' | 'SQ' | 'DL';
 type RangeKey = 'week' | 'month' | 'max';
 
 const RANGE_DAYS: Record<Exclude<RangeKey, 'max'>, number> = {
@@ -30,7 +30,6 @@ const LIFT_LABELS: Record<LiftId, string> = {
   BP: 'Bench Press',
   SQ: 'Squat',
   DL: 'Deadlift',
-  OHP: 'Overhead Press',
 };
 
 export function ProgressChart() {
@@ -136,7 +135,7 @@ export function ProgressChart() {
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-xs">
-            {(['BP', 'SQ', 'DL', 'OHP'] as LiftId[]).map((currentLift) => (
+            {(['BP', 'SQ', 'DL'] as LiftId[]).map((currentLift) => (
               <button
                 key={currentLift}
                 type="button"
@@ -145,7 +144,7 @@ export function ProgressChart() {
                   currentLift === liftId
                     ? 'border-emerald-300/60 bg-emerald-400/20 text-emerald-200'
                     : 'border-white/10 bg-black/20 text-gray-300 hover:border-white/25'
-                }`}
+                } focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0`}
               >
                 {currentLift}
               </button>
@@ -168,7 +167,7 @@ export function ProgressChart() {
                   rangeOption.key === range
                     ? 'bg-white/16 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]'
                     : 'text-gray-400 hover:text-gray-200'
-                }`}
+                } focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0`}
               >
                 {rangeOption.label}
               </button>
@@ -183,7 +182,12 @@ export function ProgressChart() {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={filteredPoints} margin={{ top: 10, right: 8, left: -14, bottom: 0 }}>
+              <AreaChart
+                data={filteredPoints}
+                margin={{ top: 10, right: 8, left: -14, bottom: 0 }}
+                accessibilityLayer={false}
+                tabIndex={-1}
+              >
                 <defs>
                   <linearGradient id="progressStroke" x1="0" y1="0" x2="1" y2="0">
                     <stop offset="0%" stopColor="#4ef2bf" />

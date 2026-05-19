@@ -6,7 +6,7 @@ import { UnauthorizedError } from "@/lib/http-errors";
 import { calculateE1rm, tmForCycle } from "@/lib/training/531";
 
 const querySchema = z.object({
-  liftId: z.enum(["SQ", "DL", "BP", "OHP"]),
+  liftId: z.enum(["SQ", "DL", "BP"]),
 });
 
 export async function GET(request: Request) {
