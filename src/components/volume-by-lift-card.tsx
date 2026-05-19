@@ -1,0 +1,187 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+
+type LiftId = 'SQ' | 'DL' | 'BP' | 'OHP';
+
+type WorkoutSet = {
+  liftId: LiftId | null;
+  repsDone: number | null;
+  repsTarget: number;
+  targetWeight: string;
+  isDone: boolean;
+};
+
+type WorkoutSession = {
+  createdAt: string;
+  sets: WorkoutSet[];
+};
+
+type VolumeSummary = {
+  liftId: LiftId;
+  tonnage: number;
+  completedSets: number;
+};
+
+const LIFT_LABELS: Record<LiftId, string> = {
+  SQ: 'Squat',
+  BP: 'Bench',
+  DL: 'Deadlift',
+  OHP: 'OHP',
+};
+
+function getSessionDate(createdAt: string): number {
+  return new Date(createdAt).getTime();
+}
+
+function getEmptySummaries(): Record<LiftId, VolumeSummary> {
+  return {
+    SQ: { liftId: 'SQ', tonnage: 0, completedSets: 0 },
+    BP: { liftId: 'BP', tonnage: 0, completedSets: 0 },
+    DL: { liftId: 'DL', tonnage: 0, completedSets: 0 },
+    OHP: { liftId: 'OHP', tonnage: 0, completedSets: 0 },
+  };
+}
+
+function shouldIncludeSession(session: WorkoutSession, cutoff: number): boolean {
+  return getSessionDate(session.createdAt) >= cutoff;
+}
+
+function accumulateVolume(sessions: WorkoutSession[]): VolumeSummary[] {
+  const nextSummaries = getEmptySummaries();
+
+  for (const session of sessions) {
+    for (const set of session.sets) {
+      if (!set.liftId) {
+        continue;
+      }
+
+      const reps = set.repsDone ?? set.repsTarget;
+      const weight = Number(set.targetWeight);
+
+      if (!Number.isFinite(reps) || !Number.isFinite(weight)) {
+        continue;
+      }
+
+      nextSummaries[set.liftId].tonnage += reps * weight;
+      if (set.isDone) {
+        nextSummaries[set.liftId].completedSets += 1;
+      }
+    }
+  }
+
+  return [nextSummaries.SQ, nextSummaries.BP, nextSummaries.DL, nextSummaries.OHP];
+}
+
+function getBarWidthClass(percentage: number): string {
+  if (percentage >= 90) return 'w-full';
+  if (percentage >= 70) return 'w-[85%]';
+  if (percentage >= 50) return 'w-[70%]';
+  if (percentage >= 25) return 'w-[45%]';
+  return 'w-[20%]';
+}
+
+export function VolumeByLiftCard() {
+  const [summaries, setSummaries] = useState<VolumeSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadVolume = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await fetch('/api/workouts', { signal: controller.signal });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error ?? 'FAILED_TO_LOAD_VOLUME');
+        }
+
+        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const sessions = (data.sessions as WorkoutSession[]).filter((session) => shouldIncludeSession(session, cutoff));
+
+        setSummaries(accumulateVolume(sessions));
+      } catch (fetchError) {
+        if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+          return;
+        }
+
+        setError(fetchError instanceof Error ? fetchError.message : 'FAILED_TO_LOAD_VOLUME');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadVolume();
+
+    return () => controller.abort();
+  }, []);
+
+  const maxTonnage = useMemo(
+    () => Math.max(...summaries.map((summary) => summary.tonnage), 1),
+    [summaries],
+  );
+
+  let content: React.ReactNode;
+
+  if (loading) {
+    content = (
+      <div className="space-y-3">
+        {['SQ', 'BP', 'DL', 'OHP'].map((lift) => (
+          <div key={lift} className="h-16 animate-pulse rounded-2xl bg-white/5" />
+        ))}
+      </div>
+    );
+  } else if (error) {
+    content = <p className="text-sm text-red-300">{error}</p>;
+  } else if (summaries.every((summary) => summary.tonnage === 0)) {
+    content = <p className="text-sm text-gray-400">Todavía no hay volumen registrado en la última semana.</p>;
+  } else {
+    content = (
+      <div className="space-y-3">
+        {summaries.map((summary) => {
+          const percentage = (summary.tonnage / maxTonnage) * 100;
+          const barWidthClass = getBarWidthClass(percentage);
+
+          return (
+            <div key={summary.liftId} className="rounded-2xl border border-white/8 bg-white/4 p-3">
+              <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                <div>
+                  <p className="font-semibold text-white">{LIFT_LABELS[summary.liftId]}</p>
+                  <p className="text-xs text-gray-400">{summary.completedSets} sets completados</p>
+                </div>
+                <p className="text-right font-mono text-sm text-[#e8f8b0]">{Math.round(summary.tonnage)} kg</p>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/8">
+                <div
+                  className={`h-full rounded-full bg-linear-to-r from-[#d6ff43] to-[#b6d900] ${barWidthClass}`}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <section className="panel p-5 sm:p-6">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.24em] text-gray-400">Analytics powerlifting</p>
+          <h2 className="mt-1 text-xl font-bold text-white">Volumen por lift</h2>
+          <p className="mt-1 text-sm text-gray-400">Últimos 7 días, solo sets marcados o planificados dentro de sesiones recientes.</p>
+        </div>
+        <div className="rounded-full border border-[#d6ff43]/30 bg-[#d6ff43]/10 px-3 py-1 text-xs font-semibold text-[#e8f8b0]">
+          7d
+        </div>
+      </div>
+
+      {content}
+    </section>
+  );
+}

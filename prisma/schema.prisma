@@ -95,14 +95,29 @@ model ExerciseSet {
   unit               WeightUnit
   isDone             Boolean        @default(false)
   setFeelingScore    Int?
+  rpe                Int?           // Escala 1-10
+  rir                Int?           // Reps in Reserve, 0-5
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   session            WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   exercise           Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  rpeLogs            RpeLog[]
 
   @@index([sessionId])
   @@index([exerciseId])
   @@index([liftId, createdAt])
+}
+
+model RpeLog {
+  id         String       @id @default(cuid())
+  setId      String
+  rpe        Int          // 1-10
+  rir        Int?         // 0-5
+  notes      String?
+  createdAt  DateTime     @default(now())
+  set        ExerciseSet  @relation(fields: [setId], references: [id], onDelete: Cascade)
+
+  @@index([setId, createdAt])
 }
 
 model UserActivityLog {
