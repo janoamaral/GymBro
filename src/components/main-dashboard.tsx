@@ -102,7 +102,7 @@ export default function MainDashboard({
               <h1 className="mt-1 text-xl font-bold text-white">{userName}</h1>
             </div>
           </div>
-          <p className="pt-1 text-xs tracking-[0.3em] text-gray-400">GymBro</p>
+          <div className="pt-1" />
         </div>
       </div>
 

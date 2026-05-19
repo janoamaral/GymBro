@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { calculateMeetCoefficients, type MeetSex } from '@/lib/training/meet-coefficients';
 import type { WeightUnit } from '@/lib/units/conversion';
 
@@ -20,10 +20,47 @@ const STATIC_DATA = {
   unit: 'kg' as WeightUnit,
 };
 
+type CoefficientsContext = {
+  squat: number;
+  bench: number;
+  deadlift: number;
+  bodyweight: number;
+  sex: MeetSex;
+  unit: WeightUnit;
+};
+
 export function MeetCoefficientsCard() {
   // Los datos de entrada quedan ocultos en el acordeón
   const [showDetails, setShowDetails] = useState(false);
-  const { squat, bench, deadlift, bodyweight, sex, unit } = STATIC_DATA;
+  const [context, setContext] = useState<CoefficientsContext>(STATIC_DATA);
+
+  useEffect(() => {
+    const fetchContext = async () => {
+      try {
+        const response = await fetch('/api/meet/coefficients-context');
+        const data = await response.json();
+
+        if (!response.ok) {
+          return;
+        }
+
+        setContext({
+          squat: Number(data.squat) || STATIC_DATA.squat,
+          bench: Number(data.bench) || STATIC_DATA.bench,
+          deadlift: Number(data.deadlift) || STATIC_DATA.deadlift,
+          bodyweight: Number(data.bodyweight) || STATIC_DATA.bodyweight,
+          sex: data.sex === 'female' ? 'female' : 'male',
+          unit: data.unit === 'lb' ? 'lb' : 'kg',
+        });
+      } catch {
+        // Fallback silencioso al contexto estático
+      }
+    };
+
+    fetchContext();
+  }, []);
+
+  const { squat, bench, deadlift, bodyweight, sex, unit } = context;
 
   const result = useMemo(() => {
     try {
