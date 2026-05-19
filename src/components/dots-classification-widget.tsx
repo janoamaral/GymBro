@@ -52,17 +52,17 @@ export function DotsClassificationWidget({ dots }: Readonly<{ dots: number }>) {
             return (
               <div
                 key={level.label}
-                className={`${segmentBase} ${segmentColors[i]} ${active ? 'shadow-[0_0_18px_rgba(255,79,138,0.55)] ring-1 ring-white/30' : 'opacity-85'}`}
+                className={`${segmentBase} ${segmentColors[i]} ${active ? 'relative z-10 scale-[1.05] shadow-[0_0_18px_rgba(255,79,138,0.55)] ring-1 ring-white/30' : 'opacity-85'}`}
               />
             );
           })}
         </div>
 
-        <div className="pointer-events-none absolute inset-0 grid grid-cols-100">
+        <div className="pointer-events-none absolute inset-0 z-20 grid grid-cols-100">
           {Array.from({ length: 100 }, (_, i) => (
             <div key={`marker-slot-${i}`} className="relative">
               {i === markerSlot && (
-                <div className="absolute -top-2 left-1/2 h-14 w-0.5 -translate-x-1/2 rounded-full bg-white/95 shadow-[0_0_16px_rgba(255,255,255,0.95),0_0_24px_rgba(255,61,133,0.75)]" />
+                <div className="absolute -top-2 left-1/2 h-14 w-0.5 -translate-x-1/2 rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,1),0_0_34px_rgba(255,255,255,0.85),0_0_48px_rgba(255,61,133,0.9)]" />
               )}
             </div>
           ))}
