@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getOrCreateCurrentUser } from "@/lib/current-user";
 import { UnauthorizedError } from "@/lib/http-errors";
-import { tmForCycle } from "@/lib/training/531";
+import { calculateE1rm, tmForCycle } from "@/lib/training/531";
 
 const querySchema = z.object({
   liftId: z.enum(["SQ", "DL", "BP", "OHP"]),
@@ -35,24 +35,52 @@ export async function GET(request: Request) {
       where: {
         session: { userId: user.id },
         liftId: parsed.liftId,
-        e1rm: {
-          not: null,
-        },
+        OR: [
+          {
+            e1rm: {
+              not: null,
+            },
+          },
+          {
+            isDone: true,
+          },
+          {
+            repsDone: {
+              not: null,
+            },
+          },
+        ],
       },
       orderBy: { createdAt: "asc" },
       take: 200,
     });
 
-    const points = sets.map((set) => ({
-      id: set.id,
-      date: (set.amrapLoggedAt ?? set.createdAt).toISOString(),
-      e1rm: Number(set.e1rm),
-      repsDone: set.repsDone,
-      repsTarget: set.repsTarget,
-      targetWeight: Number(set.targetWeight),
-      amrapStatus: set.amrapStatus,
-      unit: set.unit,
-    }));
+    const points = sets
+      .map((set) => {
+        const repsForEstimate = set.repsDone ?? (set.isDone ? set.repsTarget : null);
+        const fallbackE1rm =
+          repsForEstimate && repsForEstimate > 0
+            ? calculateE1rm(Number(set.targetWeight), repsForEstimate)
+            : null;
+
+        const effectiveE1rm = set.e1rm === null ? fallbackE1rm : Number(set.e1rm);
+
+        if (effectiveE1rm === null) {
+          return null;
+        }
+
+        return {
+          id: set.id,
+          date: (set.amrapLoggedAt ?? set.createdAt).toISOString(),
+          e1rm: effectiveE1rm,
+          repsDone: set.repsDone,
+          repsTarget: set.repsTarget,
+          targetWeight: Number(set.targetWeight),
+          amrapStatus: set.amrapStatus,
+          unit: set.unit,
+        };
+      })
+      .filter((point): point is NonNullable<typeof point> => point !== null);
 
     return NextResponse.json({
       liftId: parsed.liftId,
