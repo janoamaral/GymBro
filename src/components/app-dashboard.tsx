@@ -1012,6 +1012,8 @@ export default function AppDashboard({ userName, userPicture }: Props) {
                       day: "2-digit",
                     }),
                   }))}
+                  accessibilityLayer={false}
+                  tabIndex={-1}
                 >
                   <CartesianGrid stroke="#2b2b2b" strokeDasharray="3 3" />
                   <XAxis dataKey="label" stroke="#8b8b8b" />

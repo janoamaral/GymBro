@@ -144,7 +144,12 @@ export default function PesoPage() {
   } else {
     chartContent = (
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={chartPoints} margin={{ top: 10, right: 8, left: -14, bottom: 0 }}>
+        <AreaChart
+          data={chartPoints}
+          margin={{ top: 10, right: 8, left: -14, bottom: 0 }}
+          accessibilityLayer={false}
+          tabIndex={-1}
+        >
           <defs>
             <linearGradient id="bodyweightStroke" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor="#4ef2bf" />

@@ -140,7 +140,7 @@ export function NextWorkout() {
   }
 
   const primarySet = session.sets.find((set) => isLiftMarker(set.liftId ?? null));
-  const primaryLift = isLiftMarker(primarySet?.liftId ?? null) ? primarySet.liftId : null;
+  const primaryLift = isLiftMarker(primarySet?.liftId ?? null) ? primarySet?.liftId : null;
   const primaryTheme = primaryLift ? LIFT_THEME[primaryLift] : null;
   const primaryExerciseName = primarySet?.exercise.name ?? 'Main Lift';
 

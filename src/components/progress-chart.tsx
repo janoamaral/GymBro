@@ -183,7 +183,12 @@ export function ProgressChart() {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={filteredPoints} margin={{ top: 10, right: 8, left: -14, bottom: 0 }}>
+              <AreaChart
+                data={filteredPoints}
+                margin={{ top: 10, right: 8, left: -14, bottom: 0 }}
+                accessibilityLayer={false}
+                tabIndex={-1}
+              >
                 <defs>
                   <linearGradient id="progressStroke" x1="0" y1="0" x2="1" y2="0">
                     <stop offset="0%" stopColor="#4ef2bf" />
