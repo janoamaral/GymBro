@@ -5,7 +5,7 @@ import { CalendarDays } from 'lucide-react';
 
 interface Set {
   id: string;
-  liftId?: 'BP' | 'DL' | 'SQ' | 'OHP' | null;
+  liftId?: 'BP' | 'DL' | 'SQ' | null;
   percentage?: number | null;
   setNumber: number;
   repsTarget: number;
@@ -30,7 +30,7 @@ interface Session {
   sets: Set[];
 }
 
-type LiftMarker = 'BP' | 'DL' | 'SQ' | 'OHP';
+type LiftMarker = 'BP' | 'DL' | 'SQ';
 
 const LIFT_THEME: Record<LiftMarker, { card: string; badge: string; accent: string; name: string }> = {
   BP: {
@@ -51,16 +51,10 @@ const LIFT_THEME: Record<LiftMarker, { card: string; badge: string; accent: stri
     accent: 'text-fuchsia-200',
     name: 'Squat',
   },
-  OHP: {
-    card: 'border-orange-300/40 bg-gradient-to-br from-orange-400/18 via-[#11161d] to-[#0e1319]',
-    badge: 'border-orange-300/45 bg-orange-300/15 text-orange-100',
-    accent: 'text-orange-200',
-    name: 'Overhead Press',
-  },
 };
 
 function isLiftMarker(value: string | null | undefined): value is LiftMarker {
-  return value === 'BP' || value === 'DL' || value === 'SQ' || value === 'OHP';
+  return value === 'BP' || value === 'DL' || value === 'SQ';
 }
 
 function detect531Week(mainSets: Set[]): string {

@@ -11,7 +11,7 @@ const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
 interface Set {
   id: string;
   sessionId: string;
-  liftId: 'SQ' | 'DL' | 'BP' | 'OHP' | null;
+  liftId: 'SQ' | 'DL' | 'BP' | null;
   setNumber: number;
   repsTarget: number;
   targetWeight: number;
@@ -69,7 +69,7 @@ export default function ExerciseDetailPage() {
   const [calculatorWeight, setCalculatorWeight] = useState(0);
   const [calculatorUnit, setCalculatorUnit] = useState<'kg' | 'lb'>('kg');
   const [exerciseOneRm, setExerciseOneRm] = useState<number | null>(null);
-  const [exerciseLiftId, setExerciseLiftId] = useState<'SQ' | 'DL' | 'BP' | 'OHP' | null>(null);
+  const [exerciseLiftId, setExerciseLiftId] = useState<'SQ' | 'DL' | 'BP' | null>(null);
   const [oneRmUnit, setOneRmUnit] = useState<'kg' | 'lb' | null>(null);
   const [isTitleEntering, setIsTitleEntering] = useState(false);
   const [isMetaEntering, setIsMetaEntering] = useState(false);
@@ -81,7 +81,7 @@ export default function ExerciseDetailPage() {
     setOneRmUnit(null);
   };
 
-  const loadExerciseProfile = async (lift: 'SQ' | 'DL' | 'BP' | 'OHP') => {
+  const loadExerciseProfile = async (lift: 'SQ' | 'DL' | 'BP') => {
     const profileRes = await fetch('/api/training/531/profile');
     if (!profileRes.ok) {
       clearExerciseProfile();

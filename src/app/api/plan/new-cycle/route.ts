@@ -27,7 +27,7 @@ const newCycleSchema = z.object({
 type TemplateSet = {
   exerciseId: string;
   exerciseName: string;
-  liftId: "SQ" | "DL" | "BP" | "OHP" | null;
+  liftId: "SQ" | "DL" | "BP" | null;
   setNumber: number;
   repsTarget: number;
   targetWeight: number;

@@ -26,7 +26,6 @@ enum LiftId {
   SQ
   DL
   BP
-  OHP
 }
 
 model User {

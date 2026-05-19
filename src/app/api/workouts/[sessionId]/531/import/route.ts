@@ -6,7 +6,7 @@ import { UnauthorizedError } from "@/lib/http-errors";
 import { plan531Week } from "@/lib/training/531";
 
 const importSchema = z.object({
-  liftId: z.enum(["SQ", "DL", "BP", "OHP"]),
+  liftId: z.enum(["SQ", "DL", "BP"]),
   oneRm: z.number().positive(),
   unit: z.enum(["kg", "lb"]),
   weekNumber: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
@@ -16,11 +16,10 @@ const importSchema = z.object({
   bbbPercentage: z.number().min(0.3).max(0.7).default(0.5),
 });
 
-const LIFT_EXERCISE_NAME: Record<"SQ" | "DL" | "BP" | "OHP", string> = {
+const LIFT_EXERCISE_NAME: Record<"SQ" | "DL" | "BP", string> = {
   SQ: "Back Squat",
   DL: "Deadlift",
   BP: "Bench Press",
-  OHP: "Overhead Press",
 };
 
 export async function POST(
@@ -90,12 +89,12 @@ export async function POST(
       ),
     );
 
-    const assistanceExerciseName =
-      plan.assistanceVariant === "BBB"
-        ? `${exerciseName} BBB`
-        : plan.assistanceVariant === "FSL"
-          ? `${exerciseName} FSL`
-          : null;
+    let assistanceExerciseName: string | null = null;
+    if (plan.assistanceVariant === "BBB") {
+      assistanceExerciseName = `${exerciseName} BBB`;
+    } else if (plan.assistanceVariant === "FSL") {
+      assistanceExerciseName = `${exerciseName} FSL`;
+    }
 
     let assistanceExerciseId: string | undefined;
 

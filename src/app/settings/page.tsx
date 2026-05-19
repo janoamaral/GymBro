@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-type LiftId = 'SQ' | 'DL' | 'BP' | 'OHP';
+type LiftId = 'SQ' | 'DL' | 'BP';
 
 type TrainingProfile = {
   liftId: LiftId;

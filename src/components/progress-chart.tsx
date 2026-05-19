@@ -18,7 +18,7 @@ interface ProgressPoint {
   unit: 'kg' | 'lb';
 }
 
-type LiftId = 'BP' | 'SQ' | 'DL' | 'OHP';
+type LiftId = 'BP' | 'SQ' | 'DL';
 type RangeKey = 'week' | 'month' | 'max';
 
 const RANGE_DAYS: Record<Exclude<RangeKey, 'max'>, number> = {
@@ -30,7 +30,6 @@ const LIFT_LABELS: Record<LiftId, string> = {
   BP: 'Bench Press',
   SQ: 'Squat',
   DL: 'Deadlift',
-  OHP: 'Overhead Press',
 };
 
 export function ProgressChart() {
@@ -136,7 +135,7 @@ export function ProgressChart() {
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-xs">
-            {(['BP', 'SQ', 'DL', 'OHP'] as LiftId[]).map((currentLift) => (
+            {(['BP', 'SQ', 'DL'] as LiftId[]).map((currentLift) => (
               <button
                 key={currentLift}
                 type="button"

@@ -1,6 +1,6 @@
 import { roundTo, type WeightUnit } from "@/lib/units/conversion";
 
-export type LiftId = "SQ" | "DL" | "BP" | "OHP";
+export type LiftId = "SQ" | "DL" | "BP";
 
 export type RoundingMode = "nearest" | "up" | "down";
 
@@ -57,10 +57,11 @@ export function granularityForUnit(unit: WeightUnit): number {
 }
 
 function tmIncrementForLift(liftId: LiftId, unit: WeightUnit): number {
+  // SQ y DL incrementan igual, BP igual
   if (liftId === "SQ" || liftId === "DL") {
     return unit === "kg" ? 5 : 10;
   }
-
+  // BP
   return unit === "kg" ? 2.5 : 5;
 }
 
@@ -211,12 +212,20 @@ export function logAmrap(input: {
   const e1rm = calculateE1rm(weight, repsPerformed);
   const surplusReps = repsPerformed - plannedReps;
 
+  let status: "EXCEEDED" | "MET" | "MISSED";
+  if (surplusReps > 0) {
+    status = "EXCEEDED";
+  } else if (surplusReps === 0) {
+    status = "MET";
+  } else {
+    status = "MISSED";
+  }
   return {
     e1rm,
     repsTarget: plannedReps,
     repsPerformed,
     surplusReps,
-    status: surplusReps > 0 ? "EXCEEDED" : surplusReps === 0 ? "MET" : "MISSED",
+    status,
   } as const;
 }
 
@@ -243,19 +252,19 @@ export function plan531Week(input: {
   const tm = tmForCycle(oneRm, liftId, unit, cycleNumber);
   const sets = generate531Session({ tm, weekNumber, unit, roundingMode });
 
-  const assistanceSets =
-    assistanceVariant === "BBB"
-      ? generateBbbSets({
-          tm,
-          unit,
-          percentage: bbbPercentage,
-          roundingMode,
-        })
-      : assistanceVariant === "FSL"
-        ? generateFslSets({
-            mainSets: sets,
-          })
-        : [];
+  let assistanceSets: PlannedSet[] = [];
+  if (assistanceVariant === "BBB") {
+    assistanceSets = generateBbbSets({
+      tm,
+      unit,
+      percentage: bbbPercentage,
+      roundingMode,
+    });
+  } else if (assistanceVariant === "FSL") {
+    assistanceSets = generateFslSets({
+      mainSets: sets,
+    });
+  }
 
   return {
     liftId,

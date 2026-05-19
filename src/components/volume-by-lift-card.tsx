@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-type LiftId = 'SQ' | 'DL' | 'BP' | 'OHP';
+type LiftId = 'SQ' | 'DL' | 'BP';
 
 type WorkoutSet = {
   liftId: LiftId | null;
@@ -27,7 +27,6 @@ const LIFT_LABELS: Record<LiftId, string> = {
   SQ: 'Squat',
   BP: 'Bench',
   DL: 'Deadlift',
-  OHP: 'OHP',
 };
 
 function getSessionDate(startedAt: string): number {
@@ -48,7 +47,6 @@ function getEmptySummaries(): Record<LiftId, VolumeSummary> {
     SQ: { liftId: 'SQ', tonnage: 0, completedSets: 0 },
     BP: { liftId: 'BP', tonnage: 0, completedSets: 0 },
     DL: { liftId: 'DL', tonnage: 0, completedSets: 0 },
-    OHP: { liftId: 'OHP', tonnage: 0, completedSets: 0 },
   };
 }
 
@@ -78,7 +76,7 @@ function accumulateVolume(sessions: WorkoutSession[]): VolumeSummary[] {
     }
   }
 
-  return [nextSummaries.SQ, nextSummaries.BP, nextSummaries.DL, nextSummaries.OHP];
+  return [nextSummaries.SQ, nextSummaries.BP, nextSummaries.DL];
 }
 
 function getBarWidthClass(percentage: number): string {
@@ -139,7 +137,7 @@ export function VolumeByLiftCard() {
   if (loading) {
     content = (
       <div className="space-y-3">
-        {['SQ', 'BP', 'DL', 'OHP'].map((lift) => (
+        {['SQ', 'BP', 'DL'].map((lift) => (
           <div key={lift} className="h-16 animate-pulse rounded-2xl bg-white/5" />
         ))}
       </div>

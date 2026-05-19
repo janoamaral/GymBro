@@ -5,7 +5,7 @@ import { getOrCreateCurrentUser } from "@/lib/current-user";
 import { UnauthorizedError } from "@/lib/http-errors";
 
 const upsertProfileSchema = z.object({
-  liftId: z.enum(["SQ", "DL", "BP", "OHP"]),
+  liftId: z.enum(["SQ", "DL", "BP"]),
   oneRm: z.number().positive(),
   cycleNumber: z.number().int().min(1),
   unit: z.enum(["kg", "lb"]),

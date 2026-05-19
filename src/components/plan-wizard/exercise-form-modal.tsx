@@ -11,13 +11,13 @@ export interface ExerciseSetInput {
 export interface Exercise {
   id?: string;
   name: string;
-  liftId?: 'SQ' | 'DL' | 'BP' | 'OHP';
+  liftId?: 'SQ' | 'DL' | 'BP';
   method: '531' | 'none';
   oneRm?: number;
   sets?: ExerciseSetInput[];
   weight?: number;
   reps?: number;
-  unit: 'kg' | 'lb';
+  unit?: 'kg' | 'lb';
 }
 
 interface ExerciseFormModalProps {
@@ -27,13 +27,12 @@ interface ExerciseFormModalProps {
   readonly initialExercise?: Exercise;
 }
 
-type ExercisePickerValue = 'SQ' | 'DL' | 'BP' | 'OHP' | 'custom';
+type ExercisePickerValue = 'SQ' | 'DL' | 'BP' | 'custom';
 
 const PRESET_EXERCISES = [
   { label: 'Bench Press', value: 'BP' },
   { label: 'Squat', value: 'SQ' },
   { label: 'Dead Lift', value: 'DL' },
-  { label: 'Military Overhead Press', value: 'OHP' },
   { label: 'Custom', value: 'custom' },
 ];
 
@@ -148,7 +147,7 @@ export function ExerciseFormModal({
 
   const handleSave = () => {
     let finalName = name;
-    let finalLiftId: 'SQ' | 'DL' | 'BP' | 'OHP' | undefined;
+    let finalLiftId: 'SQ' | 'DL' | 'BP' | undefined;
 
     if (liftId === 'custom') {
       if (!finalName) {
