@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { calculateMeetCoefficients, type MeetSex } from '@/lib/training/meet-coefficients';
+import { DotsClassificationWidget } from '@/components/dots-classification-widget';
 import type { WeightUnit } from '@/lib/units/conversion';
 
 const COEFFICIENTS = [
@@ -83,22 +84,27 @@ export function MeetCoefficientsCard() {
         </div>
       </div>
 
-      {/* Cards de puntos y total */}
+
+      {/* Cards de puntos y total + DOTS Classification */}
       {result && (
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-white/8 bg-white/4 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-gray-400">Total</p>
-            <p className="mt-2 text-3xl font-black text-white">{result.total}</p>
-            <p className="text-sm text-gray-400">{unit}</p>
-          </div>
-          {COEFFICIENTS.map((coefficient) => (
-            <div key={coefficient.key} className="rounded-2xl border border-white/8 bg-white/4 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-gray-400">{coefficient.label}</p>
-              <p className="mt-2 text-3xl font-black text-[#e8f8b0]">{result[coefficient.key]}</p>
-              <p className="text-sm text-gray-400">score</p>
+        <>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-white/8 bg-white/4 p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-gray-400">Total</p>
+              <p className="mt-2 text-3xl font-black text-white">{result.total}</p>
+              <p className="text-sm text-gray-400">{unit}</p>
             </div>
-          ))}
-        </div>
+            {COEFFICIENTS.map((coefficient) => (
+              <div key={coefficient.key} className="rounded-2xl border border-white/8 bg-white/4 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-gray-400">{coefficient.label}</p>
+                <p className="mt-2 text-3xl font-black text-[#e8f8b0]">{result[coefficient.key]}</p>
+                <p className="text-sm text-gray-400">score</p>
+              </div>
+            ))}
+          </div>
+          {/* Clasificación DOTS visual */}
+          <DotsClassificationWidget dots={result.dots} />
+        </>
       )}
 
       {/* Acordeón para mostrar detalles de configuración (oculto por defecto) */}

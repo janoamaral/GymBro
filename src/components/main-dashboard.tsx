@@ -143,6 +143,7 @@ export default function MainDashboard({
         </div>
 
         <div>
+          {/* Total y coeficientes + DOTS visual */}
           <MeetCoefficientsCard />
         </div>
 
