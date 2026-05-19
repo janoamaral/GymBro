@@ -13,7 +13,7 @@ type WorkoutSet = {
 };
 
 type WorkoutSession = {
-  createdAt: string;
+  startedAt: string;
   sets: WorkoutSet[];
 };
 
@@ -30,8 +30,17 @@ const LIFT_LABELS: Record<LiftId, string> = {
   OHP: 'OHP',
 };
 
-function getSessionDate(createdAt: string): number {
-  return new Date(createdAt).getTime();
+function getSessionDate(startedAt: string): number {
+  return new Date(startedAt).getTime();
+}
+
+function getLast7DaysWindow(): { start: number; end: number } {
+  const now = new Date();
+  const end = now.getTime();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const start = startOfToday - 6 * 24 * 60 * 60 * 1000;
+
+  return { start, end };
 }
 
 function getEmptySummaries(): Record<LiftId, VolumeSummary> {
@@ -43,8 +52,9 @@ function getEmptySummaries(): Record<LiftId, VolumeSummary> {
   };
 }
 
-function shouldIncludeSession(session: WorkoutSession, cutoff: number): boolean {
-  return getSessionDate(session.createdAt) >= cutoff;
+function shouldIncludeSession(session: WorkoutSession, start: number, end: number): boolean {
+  const sessionDate = getSessionDate(session.startedAt);
+  return sessionDate >= start && sessionDate <= end;
 }
 
 function accumulateVolume(sessions: WorkoutSession[]): VolumeSummary[] {
@@ -52,21 +62,19 @@ function accumulateVolume(sessions: WorkoutSession[]): VolumeSummary[] {
 
   for (const session of sessions) {
     for (const set of session.sets) {
-      if (!set.liftId) {
+      if (!set.liftId || !set.isDone) {
         continue;
       }
 
       const reps = set.repsDone ?? set.repsTarget;
       const weight = Number(set.targetWeight);
 
-      if (!Number.isFinite(reps) || !Number.isFinite(weight)) {
+      if (!Number.isFinite(reps) || !Number.isFinite(weight) || reps <= 0 || weight <= 0) {
         continue;
       }
 
       nextSummaries[set.liftId].tonnage += reps * weight;
-      if (set.isDone) {
-        nextSummaries[set.liftId].completedSets += 1;
-      }
+      nextSummaries[set.liftId].completedSets += 1;
     }
   }
 
@@ -101,8 +109,8 @@ export function VolumeByLiftCard() {
           throw new Error(data.error ?? 'FAILED_TO_LOAD_VOLUME');
         }
 
-        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        const sessions = (data.sessions as WorkoutSession[]).filter((session) => shouldIncludeSession(session, cutoff));
+        const { start, end } = getLast7DaysWindow();
+        const sessions = (data.sessions as WorkoutSession[]).filter((session) => shouldIncludeSession(session, start, end));
 
         setSummaries(accumulateVolume(sessions));
       } catch (fetchError) {
@@ -174,7 +182,7 @@ export function VolumeByLiftCard() {
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-gray-400">Analytics powerlifting</p>
           <h2 className="mt-1 text-xl font-bold text-white">Volumen por lift</h2>
-          <p className="mt-1 text-sm text-gray-400">Últimos 7 días, solo sets marcados o planificados dentro de sesiones recientes.</p>
+          <p className="mt-1 text-sm text-gray-400">Últimos 7 días (incluye hoy), solo sets completados.</p>
         </div>
         <div className="rounded-full border border-[#d6ff43]/30 bg-[#d6ff43]/10 px-3 py-1 text-xs font-semibold text-[#e8f8b0]">
           7d
