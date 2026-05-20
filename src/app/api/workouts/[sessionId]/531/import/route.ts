@@ -64,9 +64,53 @@ export async function POST(
         },
       }));
 
-    const existingSetsCount = await db.exerciseSet.count({
-      where: { sessionId },
-    });
+    let assistanceExerciseName: string | null = null;
+    if (plan.assistanceVariant === "BBB") {
+      assistanceExerciseName = `${exerciseName} BBB`;
+    } else if (plan.assistanceVariant === "FSL") {
+      assistanceExerciseName = `${exerciseName} FSL`;
+    }
+
+    const [existingSetsCount, existingMainOrder, existingAssistanceOrder, lastOrderedSet] = await Promise.all([
+      db.exerciseSet.count({
+        where: { sessionId },
+      }),
+      db.exerciseSet.findFirst({
+        where: {
+          sessionId,
+          exerciseId: exercise.id,
+        },
+        select: {
+          exerciseOrder: true,
+        },
+      }),
+      assistanceExerciseName
+        ? db.exerciseSet.findFirst({
+            where: {
+              sessionId,
+              exercise: {
+                name: assistanceExerciseName,
+                userId: user.id,
+              },
+            },
+            select: {
+              exerciseOrder: true,
+            },
+          })
+        : Promise.resolve(null),
+      db.exerciseSet.findFirst({
+        where: { sessionId },
+        orderBy: {
+          exerciseOrder: "desc",
+        },
+        select: {
+          exerciseOrder: true,
+        },
+      }),
+    ]);
+
+    const baseOrder = (lastOrderedSet?.exerciseOrder ?? -1) + 1;
+    const mainExerciseOrder = existingMainOrder?.exerciseOrder ?? baseOrder;
 
     const createdSets = await Promise.all(
       plan.sets.map((set, index) =>
@@ -74,6 +118,7 @@ export async function POST(
           data: {
             sessionId,
             exerciseId: exercise.id,
+            exerciseOrder: mainExerciseOrder,
             liftId: payload.liftId,
             setNumber: existingSetsCount + index + 1,
             repsTarget: set.reps,
@@ -88,13 +133,6 @@ export async function POST(
         }),
       ),
     );
-
-    let assistanceExerciseName: string | null = null;
-    if (plan.assistanceVariant === "BBB") {
-      assistanceExerciseName = `${exerciseName} BBB`;
-    } else if (plan.assistanceVariant === "FSL") {
-      assistanceExerciseName = `${exerciseName} FSL`;
-    }
 
     let assistanceExerciseId: string | undefined;
 
@@ -123,6 +161,9 @@ export async function POST(
 
     if (assistanceExerciseId && plan.assistanceSets.length > 0) {
       const assistanceId = assistanceExerciseId;
+      const assistanceExerciseOrder =
+        existingAssistanceOrder?.exerciseOrder ??
+        (existingMainOrder ? baseOrder : mainExerciseOrder + 1);
 
       createdAssistanceSets = await Promise.all(
         plan.assistanceSets.map((set, index) =>
@@ -130,6 +171,7 @@ export async function POST(
             data: {
               sessionId,
               exerciseId: assistanceId,
+              exerciseOrder: assistanceExerciseOrder,
               liftId: payload.liftId,
               setNumber: existingSetsCount + plan.sets.length + index + 1,
               repsTarget: set.reps,

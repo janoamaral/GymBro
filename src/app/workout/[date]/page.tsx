@@ -1,16 +1,19 @@
 'use client';
 
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type TouchEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarDays, Trash2 } from 'lucide-react';
+import { ArrowLeft, CalendarDays, GripVertical, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Modal } from '@/components/ui/modal';
 import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
 
 const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
+const TOUCH_DRAG_THRESHOLD_PX = 12;
+const REORDER_PERSIST_DEBOUNCE_MS = 450;
 
 interface Set {
   id: string;
+  exerciseOrder: number;
   setNumber: number;
   repsTarget: number;
   targetWeight: number;
@@ -25,6 +28,7 @@ interface Set {
 interface ExerciseGroup {
   exerciseId: string;
   exerciseName: string;
+  exerciseOrder: number;
   sets: Set[];
 }
 
@@ -71,16 +75,49 @@ const groupSetsByExercise = (sessions: SessionWithSets[]): ExerciseGroup[] => {
       const currentGroup = acc.get(key) ?? {
         exerciseId: set.exercise.id,
         exerciseName: set.exercise.name,
+        exerciseOrder: set.exerciseOrder,
         sets: [],
       };
 
+      currentGroup.exerciseOrder = Math.min(currentGroup.exerciseOrder, set.exerciseOrder);
       currentGroup.sets.push(set);
       acc.set(key, currentGroup);
       return acc;
     }, new Map<string, ExerciseGroup>());
 
-  return Array.from(grouped.values());
+  return Array.from(grouped.values())
+    .map((group) => ({
+      ...group,
+      sets: [...group.sets].sort((a, b) => a.setNumber - b.setNumber),
+    }))
+    .sort((a, b) => a.exerciseOrder - b.exerciseOrder);
 };
+
+function reorderExerciseGroups(
+  groups: ExerciseGroup[],
+  fromExerciseId: string,
+  toExerciseId: string,
+): ExerciseGroup[] {
+  const fromIndex = groups.findIndex((group) => group.exerciseId === fromExerciseId);
+  const toIndex = groups.findIndex((group) => group.exerciseId === toExerciseId);
+
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+    return groups;
+  }
+
+  const reordered = [...groups];
+  const [moved] = reordered.splice(fromIndex, 1);
+  if (!moved) {
+    return groups;
+  }
+
+  reordered.splice(toIndex, 0, moved);
+
+  return reordered.map((group, index) => ({
+    ...group,
+    exerciseOrder: index,
+  }));
+}
 
 
 const WORKOUT_CACHE_KEY = 'workout-by-date-cache';
@@ -108,6 +145,18 @@ export default function WorkoutDayPage() {
   });
   const [rescheduleReason, setRescheduleReason] = useState('');
   const [rescheduling, setRescheduling] = useState(false);
+  const [draggingExerciseId, setDraggingExerciseId] = useState<string | null>(null);
+  const [dragOverExerciseId, setDragOverExerciseId] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const skipNextExerciseOpenRef = useRef(false);
+  const touchStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const touchActiveExerciseIdRef = useRef<string | null>(null);
+  const touchDraggingRef = useRef(false);
+  const dragOriginPointRef = useRef<{ x: number; y: number } | null>(null);
+  const dragRafIdRef = useRef<number | null>(null);
+  const pendingDragPointRef = useRef<{ x: number; y: number } | null>(null);
+  const persistReorderTimeoutRef = useRef<number | null>(null);
+  const latestOrderedExerciseIdsRef = useRef<string[]>([]);
 
   // Transicion simple: fade out al hacer click
   const [transitioning, setTransitioning] = useState(false);
@@ -119,18 +168,17 @@ export default function WorkoutDayPage() {
 
   // Hidrata desde cache localStorage primero
   useEffect(() => {
-    setLoading(true);
-    setError('');
-    let hydrated = false;
     try {
       const cacheRaw = localStorage.getItem(WORKOUT_CACHE_KEY);
       if (cacheRaw) {
         const cache = JSON.parse(cacheRaw);
         if (cache[date]) {
           const fetchedSessions = cache[date] as SessionWithSets[];
-          setSessions(fetchedSessions);
-          setExercises(groupSetsByExercise(fetchedSessions));
-          hydrated = true;
+          queueMicrotask(() => {
+            setSessions(fetchedSessions);
+            setExercises(groupSetsByExercise(fetchedSessions));
+            setLoading(false);
+          });
         }
       }
     } catch {}
@@ -159,8 +207,6 @@ export default function WorkoutDayPage() {
     };
 
     fetchSessionsForDay();
-    // Si no se pudo hidratar, loading se apaga tras fetch; si sí, loading se apaga ya
-    if (hydrated) setLoading(false);
   }, [date]);
 
   useEffect(() => {
@@ -175,16 +221,16 @@ export default function WorkoutDayPage() {
     return () => clearTimeout(timeout);
   }, [transitioning, targetRoute, router]);
 
-  const clearCompletedExerciseAnimation = (exerciseId: string) => {
+  const clearCompletedExerciseAnimation = useCallback((exerciseId: string) => {
     setRecentlyCompletedExerciseIds((previous) => {
       const next = { ...previous };
       delete next[exerciseId];
       return next;
     });
     delete completionAnimationTimersRef.current[exerciseId];
-  };
+  }, []);
 
-  const triggerCompletedExerciseAnimation = (exerciseId: string) => {
+  const triggerCompletedExerciseAnimation = useCallback((exerciseId: string) => {
     const existingTimer = completionAnimationTimersRef.current[exerciseId];
     if (existingTimer) {
       globalThis.window.clearTimeout(existingTimer);
@@ -198,7 +244,7 @@ export default function WorkoutDayPage() {
     completionAnimationTimersRef.current[exerciseId] = globalThis.window.setTimeout(() => {
       clearCompletedExerciseAnimation(exerciseId);
     }, 1100);
-  };
+  }, [clearCompletedExerciseAnimation]);
 
   useEffect(() => {
     const currentCompletionState = Object.fromEntries(
@@ -220,10 +266,18 @@ export default function WorkoutDayPage() {
     });
 
     previousExerciseCompletionRef.current = currentCompletionState;
-  }, [exercises]);
+  }, [exercises, triggerCompletedExerciseAnimation]);
 
   useEffect(() => {
     return () => {
+      if (dragRafIdRef.current !== null) {
+        globalThis.window.cancelAnimationFrame(dragRafIdRef.current);
+      }
+
+      if (persistReorderTimeoutRef.current !== null) {
+        globalThis.window.clearTimeout(persistReorderTimeoutRef.current);
+      }
+
       Object.values(completionAnimationTimersRef.current).forEach((timeoutId) => {
         globalThis.window.clearTimeout(timeoutId);
       });
@@ -339,6 +393,11 @@ export default function WorkoutDayPage() {
     event: MouseEvent<HTMLButtonElement>,
     exerciseGroup: ExerciseGroup
   ) => {
+    if (skipNextExerciseOpenRef.current) {
+      skipNextExerciseOpenRef.current = false;
+      return;
+    }
+
     const setCountText = `${exerciseGroup.sets.length} set${exerciseGroup.sets.length > 1 ? 's' : ''}`;
     try {
       sessionStorage.setItem(
@@ -358,6 +417,183 @@ export default function WorkoutDayPage() {
     setTransitioningExerciseId(exerciseGroup.exerciseId);
     setTransitioning(true);
     setTargetRoute(`/workout/${date}/${exerciseGroup.exerciseId}`);
+  };
+
+  const persistExerciseOrder = async (orderedExerciseIds: string[]) => {
+    const response = await fetch(`/api/workouts/by-date/${date}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ orderedExerciseIds }),
+    });
+
+    if (!response.ok) {
+      throw new Error('No se pudo guardar el nuevo orden');
+    }
+  };
+
+  const schedulePersistExerciseOrder = (orderedExerciseIds: string[]) => {
+    latestOrderedExerciseIdsRef.current = orderedExerciseIds;
+
+    if (persistReorderTimeoutRef.current !== null) {
+      globalThis.window.clearTimeout(persistReorderTimeoutRef.current);
+    }
+
+    persistReorderTimeoutRef.current = globalThis.window.setTimeout(async () => {
+      try {
+        await persistExerciseOrder(latestOrderedExerciseIdsRef.current);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'No se pudo reordenar');
+      }
+    }, REORDER_PERSIST_DEBOUNCE_MS);
+  };
+
+  const handleDropExercise = async (targetExerciseId: string) => {
+    if (!draggingExerciseId || draggingExerciseId === targetExerciseId) {
+      return;
+    }
+
+    skipNextExerciseOpenRef.current = true;
+
+    const reordered = reorderExerciseGroups(exercises, draggingExerciseId, targetExerciseId);
+    if (reordered === exercises) {
+      return;
+    }
+
+    setExercises(reordered);
+    setDragOverExerciseId(null);
+    schedulePersistExerciseOrder(reordered.map((exercise) => exercise.exerciseId));
+  };
+
+  const resetDragState = () => {
+    setDraggingExerciseId(null);
+    setDragOverExerciseId(null);
+    setDragOffset({ x: 0, y: 0 });
+    touchStartPointRef.current = null;
+    touchActiveExerciseIdRef.current = null;
+    touchDraggingRef.current = false;
+    dragOriginPointRef.current = null;
+    pendingDragPointRef.current = null;
+    if (dragRafIdRef.current !== null) {
+      globalThis.window.cancelAnimationFrame(dragRafIdRef.current);
+      dragRafIdRef.current = null;
+    }
+    globalThis.window.setTimeout(() => {
+      skipNextExerciseOpenRef.current = false;
+    }, 0);
+  };
+
+  const flushDragOffset = () => {
+    const point = pendingDragPointRef.current;
+    const origin = dragOriginPointRef.current;
+
+    dragRafIdRef.current = null;
+
+    if (!point || !origin) {
+      return;
+    }
+
+    setDragOffset({
+      x: point.x - origin.x,
+      y: point.y - origin.y,
+    });
+  };
+
+  const updateDragOffset = (clientX: number, clientY: number) => {
+    const origin = dragOriginPointRef.current;
+    if (!origin) {
+      return;
+    }
+
+    pendingDragPointRef.current = { x: clientX, y: clientY };
+
+    if (dragRafIdRef.current !== null) {
+      return;
+    }
+
+    dragRafIdRef.current = globalThis.window.requestAnimationFrame(flushDragOffset);
+  };
+
+  const getExerciseIdFromPoint = (x: number, y: number, excludeExerciseId?: string): string | null => {
+    const elements = document.elementsFromPoint(x, y);
+
+    for (const element of elements) {
+      const card = element.closest('[data-exercise-card-id]') as HTMLElement | null;
+      const exerciseId = card?.dataset.exerciseCardId;
+
+      if (!exerciseId) {
+        continue;
+      }
+
+      if (excludeExerciseId && exerciseId === excludeExerciseId) {
+        continue;
+      }
+
+      return exerciseId;
+    }
+
+    return null;
+  };
+
+  const handleCardTouchStart = (event: TouchEvent<HTMLButtonElement>, exerciseId: string) => {
+    const touch = event.touches[0];
+    if (!touch) {
+      return;
+    }
+
+    touchStartPointRef.current = { x: touch.clientX, y: touch.clientY };
+    dragOriginPointRef.current = { x: touch.clientX, y: touch.clientY };
+    touchActiveExerciseIdRef.current = exerciseId;
+    touchDraggingRef.current = false;
+  };
+
+  const handleCardTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
+    const activeExerciseId = touchActiveExerciseIdRef.current;
+    const touch = event.touches[0];
+    const start = touchStartPointRef.current;
+
+    if (!activeExerciseId || !touch || !start) {
+      return;
+    }
+
+    const deltaX = Math.abs(touch.clientX - start.x);
+    const deltaY = Math.abs(touch.clientY - start.y);
+    const movedEnough = deltaX > TOUCH_DRAG_THRESHOLD_PX || deltaY > TOUCH_DRAG_THRESHOLD_PX;
+
+    if (!touchDraggingRef.current && movedEnough) {
+      touchDraggingRef.current = true;
+      skipNextExerciseOpenRef.current = true;
+      setDraggingExerciseId(activeExerciseId);
+      setDragOverExerciseId(activeExerciseId);
+    }
+
+    if (!touchDraggingRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    updateDragOffset(touch.clientX, touch.clientY);
+
+    const targetExerciseId = getExerciseIdFromPoint(touch.clientX, touch.clientY, activeExerciseId);
+    if (targetExerciseId && targetExerciseId !== dragOverExerciseId) {
+      setDragOverExerciseId(targetExerciseId);
+    }
+  };
+
+  const handleCardTouchEnd = () => {
+    const activeExerciseId = touchActiveExerciseIdRef.current;
+    const targetExerciseId = dragOverExerciseId;
+    const isDragging = touchDraggingRef.current;
+
+    if (!activeExerciseId || !isDragging) {
+      resetDragState();
+      return;
+    }
+
+    void handleDropExercise(targetExerciseId ?? activeExerciseId).finally(() => {
+      resetDragState();
+    });
   };
 
   if (loading) {
@@ -439,12 +675,14 @@ export default function WorkoutDayPage() {
           {exercises.map((exerciseGroup, idx) => {
             const isNext = idx === nextExerciseIndex;
             const isSelected = transitioningExerciseId === exerciseGroup.exerciseId;
+            const isDraggingThisCard = draggingExerciseId === exerciseGroup.exerciseId;
+            const isDragTargetCard = dragOverExerciseId === exerciseGroup.exerciseId;
             const isComplete =
               exerciseGroup.sets.length > 0 && exerciseGroup.sets.every((set) => Boolean(set.isDone));
             const isCompletionAnimating = Boolean(recentlyCompletedExerciseIds[exerciseGroup.exerciseId]);
             const baseCardClass = isNext
               ? 'relative rounded-2xl bg-accent text-[#101010] shadow-lg p-6 text-left transition-all min-h-25'
-              : 'panel-soft p-6 text-white text-left transition-all min-h-25';
+              : 'relative panel-soft p-6 text-white text-left transition-all min-h-25';
             let selectedCardClass = '';
             if (isSelected && isNext) {
               selectedCardClass = 'scale-[0.98] -translate-y-1';
@@ -454,8 +692,45 @@ export default function WorkoutDayPage() {
             return (
               <button
                 key={exerciseGroup.exerciseId}
+                data-exercise-card-id={exerciseGroup.exerciseId}
+                draggable
+                onDragStart={(event) => {
+                  setDraggingExerciseId(exerciseGroup.exerciseId);
+                  setDragOverExerciseId(exerciseGroup.exerciseId);
+                  dragOriginPointRef.current = { x: event.clientX, y: event.clientY };
+                  setDragOffset({ x: 0, y: 0 });
+                }}
+                onDrag={(event) => {
+                  if (event.clientX === 0 && event.clientY === 0) {
+                    return;
+                  }
+
+                  updateDragOffset(event.clientX, event.clientY);
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  if (dragOverExerciseId !== exerciseGroup.exerciseId) {
+                    setDragOverExerciseId(exerciseGroup.exerciseId);
+                  }
+                }}
+                onDrop={async (event) => {
+                  event.preventDefault();
+                  await handleDropExercise(exerciseGroup.exerciseId);
+                }}
+                onDragEnd={() => {
+                  resetDragState();
+                }}
+                onTouchStart={(event) => handleCardTouchStart(event, exerciseGroup.exerciseId)}
+                onTouchMove={handleCardTouchMove}
+                onTouchEnd={handleCardTouchEnd}
+                onTouchCancel={resetDragState}
                 onClick={(event) => handleExerciseOpen(event, exerciseGroup)}
-                className={`${baseCardClass} ${selectedCardClass}`}
+                className={`${baseCardClass} ${selectedCardClass} cursor-grab active:cursor-grabbing ${isDragTargetCard ? 'ring-2 ring-sky-300/70 drag-card--target' : ''} ${isDraggingThisCard ? 'opacity-85 drag-card--active transition-none' : ''}`}
+                style={
+                  isDraggingThisCard
+                    ? { transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)` }
+                    : undefined
+                }
               >
                 <div className="mb-1 flex items-center justify-between gap-3">
                   <span className={isNext ? 'text-xs font-heading uppercase tracking-widest opacity-70' : 'text-xs font-heading uppercase tracking-widest text-gray-400'}>
@@ -467,6 +742,10 @@ export default function WorkoutDayPage() {
                     {exerciseGroup.sets.length} set{exerciseGroup.sets.length > 1 ? 's' : ''}
                   </span>
                 </div>
+                <GripVertical
+                  size={16}
+                  className={`pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 ${isNext ? 'text-[#101010]/70' : 'text-gray-500'}`}
+                />
                 <span
                   data-exercise-title
                   className={`set-card-title ${isNext || isComplete ? 'text-3xl font-black font-heading' : 'text-2xl font-bold font-heading'} ${isComplete ? 'set-card-title--done' : ''} transition-all duration-200 ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-8 scale-110 opacity-70' : ''}`}
@@ -579,6 +858,16 @@ export default function WorkoutDayPage() {
           line-height: 1.05;
         }
 
+        .drag-card--active {
+          z-index: 20;
+          box-shadow: 0 24px 60px rgba(5, 12, 20, 0.45);
+          will-change: transform;
+        }
+
+        .drag-card--target {
+          animation: drag-card-target 520ms ease-in-out infinite;
+        }
+
         .set-card-title--done {
           color: #ffe7e7;
         }
@@ -644,6 +933,27 @@ export default function WorkoutDayPage() {
           100% {
             opacity: 0.88;
             transform: translateY(-50%) scaleX(1) rotate(0deg);
+          }
+        }
+
+        @keyframes drag-card-lift {
+          0% {
+            transform: translateY(0) scale(1) rotate(0deg);
+          }
+          100% {
+            transform: translateY(-3px) scale(1.02) rotate(-0.7deg);
+          }
+        }
+
+        @keyframes drag-card-target {
+          0% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-1px);
+          }
+          100% {
+            transform: translateY(0);
           }
         }
       `}</style>

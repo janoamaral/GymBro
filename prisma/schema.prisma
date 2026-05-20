@@ -79,6 +79,7 @@ model ExerciseSet {
   id                 String         @id @default(cuid())
   sessionId          String
   exerciseId         String
+  exerciseOrder      Int            @default(0)
   liftId             LiftId?
   setNumber          Int
   repsTarget         Int
@@ -103,6 +104,7 @@ model ExerciseSet {
   rpeLogs            RpeLog[]
 
   @@index([sessionId])
+  @@index([sessionId, exerciseOrder])
   @@index([exerciseId])
   @@index([liftId, createdAt])
 }

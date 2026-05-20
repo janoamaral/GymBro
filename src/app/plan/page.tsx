@@ -56,6 +56,28 @@ export default function PlanPage() {
     setShowDeleteConfirm(true);
   };
 
+  const handleReorderExercises = (fromIndex: number, toIndex: number) => {
+    setExercises((currentExercises) => {
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= currentExercises.length ||
+        toIndex >= currentExercises.length
+      ) {
+        return currentExercises;
+      }
+
+      const reordered = [...currentExercises];
+      const [moved] = reordered.splice(fromIndex, 1);
+      if (!moved) {
+        return currentExercises;
+      }
+
+      reordered.splice(toIndex, 0, moved);
+      return reordered;
+    });
+  };
+
   const handleDeleteExercise = () => {
     if (deleteIndex !== null) {
       setExercises(exercises.filter((_, i) => i !== deleteIndex));
@@ -149,6 +171,7 @@ export default function PlanPage() {
               exercises={exercises}
               onEdit={handleEditExercise}
               onDelete={handleConfirmDelete}
+              onReorder={handleReorderExercises}
             />
 
             {/* Floating Action Button */}

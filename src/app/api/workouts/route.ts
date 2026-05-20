@@ -4,6 +4,14 @@ import { db } from "@/lib/db";
 import { getOrCreateCurrentUser } from "@/lib/current-user";
 import { UnauthorizedError } from "@/lib/http-errors";
 
+function isExerciseOrderUnsupported(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return /Unknown argument `exerciseOrder`/i.test(error.message);
+}
+
 const createWorkoutSchema = z.object({
   title: z.string().min(1).max(120),
 });
@@ -12,19 +20,41 @@ export async function GET() {
   try {
     const user = await getOrCreateCurrentUser();
 
-    const sessions = await db.workoutSession.findMany({
-      where: { userId: user.id },
-      orderBy: [{ startedAt: "desc" }, { createdAt: "desc" }],
-      include: {
-        sets: {
-          orderBy: [{ createdAt: "asc" }],
-          include: {
-            exercise: true,
+    let sessions;
+
+    try {
+      sessions = await db.workoutSession.findMany({
+        where: { userId: user.id },
+        orderBy: [{ startedAt: "desc" }, { createdAt: "desc" }],
+        include: {
+          sets: {
+            orderBy: [{ exerciseOrder: "asc" }, { setNumber: "asc" }, { createdAt: "asc" }],
+            include: {
+              exercise: true,
+            },
           },
         },
-      },
-      take: 120,
-    });
+        take: 120,
+      });
+    } catch (error) {
+      if (!isExerciseOrderUnsupported(error)) {
+        throw error;
+      }
+
+      sessions = await db.workoutSession.findMany({
+        where: { userId: user.id },
+        orderBy: [{ startedAt: "desc" }, { createdAt: "desc" }],
+        include: {
+          sets: {
+            orderBy: [{ setNumber: "asc" }, { createdAt: "asc" }],
+            include: {
+              exercise: true,
+            },
+          },
+        },
+        take: 120,
+      });
+    }
 
     return NextResponse.json({ sessions });
   } catch (error) {
