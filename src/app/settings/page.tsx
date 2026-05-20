@@ -13,6 +13,8 @@ type TrainingProfile = {
   unit: 'kg' | 'lb';
 };
 
+const KG_PLATE_OPTIONS = [1.25, 2.5, 5, 10, 15, 20, 25] as const;
+
 export default function SettingsPage() {
   const router = useRouter();
   const [cycleIncrement531, setCycleIncrement531] = useState(5);
@@ -20,6 +22,7 @@ export default function SettingsPage() {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [defaultUnit, setDefaultUnit] = useState<'kg' | 'lb'>('kg');
   const [competitionSex, setCompetitionSex] = useState<'male' | 'female'>('male');
+  const [availablePlatesKg, setAvailablePlatesKg] = useState<number[]>([...KG_PLATE_OPTIONS]);
   const [profiles, setProfiles] = useState<TrainingProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,6 +52,12 @@ export default function SettingsPage() {
           setAvatarUrl(settingsData.settings.avatarUrl ?? '');
           setDefaultUnit(settingsData.settings.defaultUnit === 'lb' ? 'lb' : 'kg');
           setCompetitionSex(settingsData.settings.competitionSex === 'female' ? 'female' : 'male');
+
+          const fetchedPlates = Array.isArray(settingsData.settings.availablePlatesKg)
+            ? (settingsData.settings.availablePlatesKg as number[])
+            : [...KG_PLATE_OPTIONS];
+
+          setAvailablePlatesKg(KG_PLATE_OPTIONS.filter((plate) => fetchedPlates.includes(plate)));
         }
 
         if (Array.isArray(profileData.profiles)) {
@@ -94,6 +103,7 @@ export default function SettingsPage() {
             avatarUrl: avatarUrl.trim(),
             defaultUnit,
             competitionSex,
+            availablePlatesKg,
           }),
         }),
       ];
@@ -167,6 +177,16 @@ export default function SettingsPage() {
       }))
     );
     showMessage('Ciclos reseteados a 1. Guarda para confirmar cambios.');
+  };
+
+  const handleTogglePlate = (plate: number) => {
+    setAvailablePlatesKg((current) => {
+      if (current.includes(plate)) {
+        return current.filter((value) => value !== plate);
+      }
+
+      return KG_PLATE_OPTIONS.filter((value) => current.includes(value) || value === plate);
+    });
   };
 
   if (loading) {
@@ -265,6 +285,32 @@ export default function SettingsPage() {
                     <option value="female">Femenino</option>
                   </select>
                 </label>
+              </div>
+
+              <div>
+                <p className="block text-sm font-medium text-gray-300">Plates disponibles (kg)</p>
+                <p className="mt-1 text-xs text-gray-400">
+                  Desactiva los plates que no hay en tu gym para que la calculadora no los use.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {KG_PLATE_OPTIONS.map((plate) => {
+                    const isActive = availablePlatesKg.includes(plate);
+
+                    return (
+                      <button
+                        key={plate}
+                        type="button"
+                        onClick={() => handleTogglePlate(plate)}
+                        className={`w-16 rounded-md border border-[#2a3240] px-3 py-1.5 text-center text-sm font-semibold transition-colors ${
+                          isActive ? 'bg-[#d6ff43] text-[#0c1100]' : 'bg-[#191f28] text-[#d5dae3]'
+                        }`}
+                        title={`Toggle plate ${plate} kg`}
+                      >
+                        {plate}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>

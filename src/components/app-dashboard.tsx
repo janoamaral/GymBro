@@ -95,6 +95,8 @@ type Props = {
   userPicture: string | null;
 };
 
+const KG_PLATE_OPTIONS = [25, 20, 15, 10, 5, 2.5, 1.25] as const;
+
 export default function AppDashboard({ userName, userPicture }: Props) {
   const [unit, setUnit] = useState<WeightUnit>("kg");
   const [targetWeight, setTargetWeight] = useState(120);
@@ -122,6 +124,7 @@ export default function AppDashboard({ userName, userPicture }: Props) {
     DL: undefined,
     BP: undefined,
   });
+  const [availablePlatesKg, setAvailablePlatesKg] = useState<number[]>([...KG_PLATE_OPTIONS]);
 
   const calculation = useMemo(() => {
     if (targetWeight > 0 && barbellWeight > 0 && targetWeight < barbellWeight) {
@@ -155,8 +158,12 @@ export default function AppDashboard({ userName, userPicture }: Props) {
       return [];
     }
 
-    return suggestPlatesPerSide(calculation.result.roundedPerSide, unit);
-  }, [calculation.result, unit]);
+    return suggestPlatesPerSide(
+      calculation.result.roundedPerSide,
+      unit,
+      unit === "kg" ? availablePlatesKg : undefined,
+    );
+  }, [calculation.result, unit, availablePlatesKg]);
 
   const targetDual = formatDualWeight(targetWeight, unit);
 
@@ -194,6 +201,21 @@ export default function AppDashboard({ userName, userPicture }: Props) {
     setProfiles531(nextProfiles);
   }
 
+  async function loadUserSettings() {
+    const response = await fetch("/api/user/settings", { method: "GET" });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error ?? "FAILED_TO_LOAD_SETTINGS");
+    }
+
+    const fetchedPlates = Array.isArray(data.settings?.availablePlatesKg)
+      ? (data.settings.availablePlatesKg as number[])
+      : [...KG_PLATE_OPTIONS];
+
+    setAvailablePlatesKg(KG_PLATE_OPTIONS.filter((plate) => fetchedPlates.includes(plate)));
+  }
+
   async function load531Progress(nextLiftId: LiftId) {
     const response = await fetch(`/api/training/531/progress?liftId=${nextLiftId}`, { method: "GET" });
     const data = await response.json();
@@ -213,6 +235,9 @@ export default function AppDashboard({ userName, userPicture }: Props) {
       });
       load531Profiles().catch((error) => {
         setApiError(error instanceof Error ? error.message : "FAILED_TO_LOAD_531_PROFILES");
+      });
+      loadUserSettings().catch((error) => {
+        setApiError(error instanceof Error ? error.message : "FAILED_TO_LOAD_SETTINGS");
       });
     }, 0);
 

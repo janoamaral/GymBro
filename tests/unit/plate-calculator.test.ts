@@ -39,3 +39,11 @@ test("suggests sane plates for a per-side load", () => {
 
   assert.deepEqual(result, [25, 25, 1.25]);
 });
+
+test("does not use disabled plate sizes", () => {
+  const availablePlates = [20, 15, 10, 5, 2.5, 1.25];
+  const result = suggestPlatesPerSide(51.25, "kg", availablePlates);
+
+  assert.equal(result.includes(25), false);
+  assert.deepEqual(result, [20, 20, 10, 1.25]);
+});

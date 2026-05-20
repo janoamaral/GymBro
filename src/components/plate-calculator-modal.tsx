@@ -12,6 +12,7 @@ interface PlateCalculatorModalProps {
   readonly onClose: () => void;
   readonly targetWeight: number;
   readonly unit: 'kg' | 'lb';
+  readonly availablePlatesKg?: number[];
 }
 
 export function PlateCalculatorModal({
@@ -19,6 +20,7 @@ export function PlateCalculatorModal({
   onClose,
   targetWeight,
   unit,
+  availablePlatesKg,
 }: PlateCalculatorModalProps) {
   const [barbellWeight, setBarbellWeight] = useState(unit === 'kg' ? 20 : 45);
   const result = useMemo(() => {
@@ -39,8 +41,12 @@ export function PlateCalculatorModal({
       return [];
     }
 
-    return suggestPlatesPerSide(Number(result.perSide), unit);
-  }, [result, unit]);
+    return suggestPlatesPerSide(
+      Number(result.perSide),
+      unit,
+      unit === 'kg' ? availablePlatesKg : undefined,
+    );
+  }, [result, unit, availablePlatesKg]);
 
   const plateBadges = useMemo(() => {
     const counts = new Map<number, number>();

@@ -7,6 +7,7 @@ import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
+const KG_PLATE_OPTIONS = [25, 20, 15, 10, 5, 2.5, 1.25] as const;
 
 interface Set {
   id: string;
@@ -68,6 +69,7 @@ export default function ExerciseDetailPage() {
   const [showCalculator, setShowCalculator] = useState(false);
   const [calculatorWeight, setCalculatorWeight] = useState(0);
   const [calculatorUnit, setCalculatorUnit] = useState<'kg' | 'lb'>('kg');
+  const [availablePlatesKg, setAvailablePlatesKg] = useState<number[]>([...KG_PLATE_OPTIONS]);
   const [exerciseOneRm, setExerciseOneRm] = useState<number | null>(null);
   const [exerciseLiftId, setExerciseLiftId] = useState<'SQ' | 'DL' | 'BP' | null>(null);
   const [oneRmUnit, setOneRmUnit] = useState<'kg' | 'lb' | null>(null);
@@ -168,6 +170,28 @@ export default function ExerciseDetailPage() {
 
     fetchExerciseSets();
   }, [date, exerciseId]);
+
+  useEffect(() => {
+    const loadPlateSettings = async () => {
+      try {
+        const response = await fetch('/api/user/settings');
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+        const fetched = Array.isArray(data.settings?.availablePlatesKg)
+          ? (data.settings.availablePlatesKg as number[])
+          : [...KG_PLATE_OPTIONS];
+
+        setAvailablePlatesKg(KG_PLATE_OPTIONS.filter((plate) => fetched.includes(plate)));
+      } catch {
+        // Fallback silencioso a defaults.
+      }
+    };
+
+    loadPlateSettings();
+  }, []);
 
   useEffect(() => {
     if (loading) {
@@ -515,6 +539,7 @@ export default function ExerciseDetailPage() {
         onClose={() => setShowCalculator(false)}
         targetWeight={calculatorWeight}
         unit={calculatorUnit}
+        availablePlatesKg={availablePlatesKg}
       />
     </main>
   );
