@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Calculator, Dumbbell } from 'lucide-react';
 import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
@@ -30,6 +30,14 @@ interface Set {
 interface SessionWithSets {
   sets: Set[];
 }
+
+type SetServerSnapshot = Pick<Set, 'setFeelingScore' | 'rpe' | 'rir' | 'isDone'>;
+type SetSyncState = {
+  metricsQueued: boolean;
+  metricsInFlight: boolean;
+  doneQueued: boolean;
+  doneInFlight: boolean;
+};
 
 const WORKOUT_CACHE_KEY = 'workout-by-date-cache';
 
@@ -66,6 +74,8 @@ export default function ExerciseDetailPage() {
   const [sets, setSets] = useState<Set[]>(() => getCachedExerciseSets(date, exerciseId));
   const [loading, setLoading] = useState(() => getCachedExerciseSets(date, exerciseId).length === 0);
   const [error, setError] = useState('');
+  const [syncError, setSyncError] = useState('');
+  const [savingSetIds, setSavingSetIds] = useState<Record<string, boolean>>({});
   const [showCalculator, setShowCalculator] = useState(false);
   const [calculatorWeight, setCalculatorWeight] = useState(0);
   const [calculatorUnit, setCalculatorUnit] = useState<'kg' | 'lb'>('kg');
@@ -77,6 +87,64 @@ export default function ExerciseDetailPage() {
   const [isMetaEntering, setIsMetaEntering] = useState(false);
   const [entryTitle, setEntryTitle] = useState<string | null>(null);
   const [entrySetCountText, setEntrySetCountText] = useState<string | null>(null);
+  const metricsDebounceTimersRef = useRef<Record<string, number>>({});
+  const pendingMetricsUpdatesRef = useRef<
+    Record<string, { sessionId: string; updates: Partial<Pick<Set, 'setFeelingScore' | 'rpe' | 'rir'>> }>
+  >({});
+  const doneDebounceTimersRef = useRef<Record<string, number>>({});
+  const pendingDoneUpdatesRef = useRef<Record<string, { sessionId: string; isDone: boolean }>>({});
+  const confirmedSetValuesRef = useRef<Record<string, SetServerSnapshot>>({});
+  const setSyncStateRef = useRef<Record<string, SetSyncState>>({});
+
+  const updateSetSyncFlag = (setId: string, flag: keyof SetSyncState, value: boolean) => {
+    const current = setSyncStateRef.current[setId] ?? {
+      metricsQueued: false,
+      metricsInFlight: false,
+      doneQueued: false,
+      doneInFlight: false,
+    };
+
+    current[flag] = value;
+
+    const isSavingSet = current.metricsQueued || current.metricsInFlight || current.doneQueued || current.doneInFlight;
+
+    if (isSavingSet) {
+      setSyncStateRef.current[setId] = current;
+    } else {
+      delete setSyncStateRef.current[setId];
+    }
+
+    setSavingSetIds((previous) => {
+      const alreadySaving = Boolean(previous[setId]);
+
+      if (isSavingSet && alreadySaving) {
+        return previous;
+      }
+
+      if (!isSavingSet && !alreadySaving) {
+        return previous;
+      }
+
+      if (isSavingSet) {
+        return { ...previous, [setId]: true };
+      }
+
+      const next = { ...previous };
+      delete next[setId];
+      return next;
+    });
+  };
+
+  const rememberConfirmedValues = (sourceSets: Set[]) => {
+    sourceSets.forEach((set) => {
+      confirmedSetValuesRef.current[set.id] = {
+        setFeelingScore: set.setFeelingScore,
+        rpe: set.rpe,
+        rir: set.rir,
+        isDone: set.isDone,
+      };
+    });
+  };
 
   const clearExerciseProfile = () => {
     setExerciseOneRm(null);
@@ -112,6 +180,7 @@ export default function ExerciseDetailPage() {
 
     if (hasCachedSets) {
       setSets(cachedSets);
+      rememberConfirmedValues(cachedSets);
       setLoading(false);
     } else {
       setLoading(true);
@@ -151,6 +220,7 @@ export default function ExerciseDetailPage() {
         const filteredSets = extractExerciseSets(data.sessions as SessionWithSets[], exerciseId);
 
         setSets(filteredSets);
+        rememberConfirmedValues(filteredSets);
 
         // Actualiza cache
         try {
@@ -240,65 +310,191 @@ export default function ExerciseDetailPage() {
     }
   }, [loading, date, exerciseId]);
 
-  const updateSetMetrics = async (setId: string, updates: Partial<Pick<Set, 'setFeelingScore' | 'rpe' | 'rir'>>) => {
-    const set = sets.find((s) => s.id === setId);
-    if (!set) return;
+  useEffect(() => {
+    return () => {
+      Object.values(metricsDebounceTimersRef.current).forEach((timeoutId) => {
+        globalThis.window.clearTimeout(timeoutId);
+      });
+      Object.values(doneDebounceTimersRef.current).forEach((timeoutId) => {
+        globalThis.window.clearTimeout(timeoutId);
+      });
+      metricsDebounceTimersRef.current = {};
+      pendingMetricsUpdatesRef.current = {};
+      doneDebounceTimersRef.current = {};
+      pendingDoneUpdatesRef.current = {};
+      confirmedSetValuesRef.current = {};
+      setSyncStateRef.current = {};
+    };
+  }, []);
+
+  const flushSetMetricsUpdate = async (setId: string) => {
+    const pending = pendingMetricsUpdatesRef.current[setId];
+    if (!pending || Object.keys(pending.updates).length === 0) {
+      return;
+    }
+
+    delete pendingMetricsUpdatesRef.current[setId];
 
     try {
-      const res = await fetch(`/api/workouts/${set.sessionId}/sets/${setId}`, {
+      const res = await fetch(`/api/workouts/${pending.sessionId}/sets/${setId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
+        body: JSON.stringify(pending.updates),
       });
 
       if (!res.ok) throw new Error('Failed to update set');
 
-      setSets(
-        sets.map((s) =>
-          s.id === setId ? { ...s, ...updates } : s
-        )
-      );
+      const confirmed = confirmedSetValuesRef.current[setId];
+      confirmedSetValuesRef.current[setId] = {
+        ...confirmed,
+        ...pending.updates,
+      };
     } catch (err) {
       console.error('Failed to update set metrics:', err);
+      const confirmed = confirmedSetValuesRef.current[setId];
+      if (confirmed) {
+        setSets((currentSets) =>
+          currentSets.map((set) =>
+            set.id === setId
+              ? {
+                  ...set,
+                  setFeelingScore: confirmed.setFeelingScore,
+                  rpe: confirmed.rpe,
+                  rir: confirmed.rir,
+                }
+              : set
+          )
+        );
+      }
+      setSyncError('No se pudieron guardar métricas del set. Reintentá.');
+    } finally {
+      updateSetSyncFlag(setId, 'metricsInFlight', false);
     }
   };
 
-  const handleSetFeelingChange = async (setId: string, score: number) => {
-    await updateSetMetrics(setId, { setFeelingScore: score });
+  const scheduleSetMetricsUpdate = (
+    setId: string,
+    sessionId: string,
+    updates: Partial<Pick<Set, 'setFeelingScore' | 'rpe' | 'rir'>>
+  ) => {
+    updateSetSyncFlag(setId, 'metricsQueued', true);
+    const pendingForSet = pendingMetricsUpdatesRef.current[setId];
+    const mergedUpdates = pendingForSet?.updates
+      ? { ...pendingForSet.updates, ...updates }
+      : updates;
+    pendingMetricsUpdatesRef.current[setId] = {
+      sessionId,
+      updates: mergedUpdates,
+    };
+
+    const existingTimer = metricsDebounceTimersRef.current[setId];
+    if (existingTimer) {
+      globalThis.window.clearTimeout(existingTimer);
+    }
+
+    metricsDebounceTimersRef.current[setId] = globalThis.window.setTimeout(() => {
+      updateSetSyncFlag(setId, 'metricsQueued', false);
+      updateSetSyncFlag(setId, 'metricsInFlight', true);
+      void flushSetMetricsUpdate(setId);
+      delete metricsDebounceTimersRef.current[setId];
+    }, 300);
   };
 
-  const handleRpeChange = async (setId: string, rpe: number) => {
-    await updateSetMetrics(setId, { rpe });
+  const handleSetFeelingChange = (setId: string, score: number) => {
+    setSyncError('');
+    const set = sets.find((item) => item.id === setId);
+    if (!set) {
+      return;
+    }
+    setSets((currentSets) =>
+      currentSets.map((s) => (s.id === setId ? { ...s, setFeelingScore: score } : s))
+    );
+    scheduleSetMetricsUpdate(setId, set.sessionId, { setFeelingScore: score });
   };
 
-  const handleRirChange = async (setId: string, rir: number) => {
-    await updateSetMetrics(setId, { rir });
+  const handleRpeChange = (setId: string, rpe: number) => {
+    setSyncError('');
+    const set = sets.find((item) => item.id === setId);
+    if (!set) {
+      return;
+    }
+    setSets((currentSets) => currentSets.map((s) => (s.id === setId ? { ...s, rpe } : s)));
+    scheduleSetMetricsUpdate(setId, set.sessionId, { rpe });
   };
 
-  const handleToggleDone = async (setId: string, isDone: boolean) => {
-    const set = sets.find((s) => s.id === setId);
-    if (!set) return;
+  const handleRirChange = (setId: string, rir: number) => {
+    setSyncError('');
+    const set = sets.find((item) => item.id === setId);
+    if (!set) {
+      return;
+    }
+    setSets((currentSets) => currentSets.map((s) => (s.id === setId ? { ...s, rir } : s)));
+    scheduleSetMetricsUpdate(setId, set.sessionId, { rir });
+  };
+
+  const flushSetDoneUpdate = async (setId: string) => {
+    const pending = pendingDoneUpdatesRef.current[setId];
+    if (!pending) {
+      return;
+    }
+
+    delete pendingDoneUpdatesRef.current[setId];
 
     try {
-      const res = await fetch(
-        `/api/workouts/${set.sessionId}/sets/${setId}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ isDone: !isDone }),
-        }
-      );
+      const res = await fetch(`/api/workouts/${pending.sessionId}/sets/${setId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isDone: pending.isDone }),
+      });
 
       if (!res.ok) throw new Error('Failed to update set');
 
-      setSets(
-        sets.map((s) =>
-          s.id === setId ? { ...s, isDone: !isDone } : s
-        )
-      );
+      const confirmed = confirmedSetValuesRef.current[setId];
+      confirmedSetValuesRef.current[setId] = {
+        ...confirmed,
+        isDone: pending.isDone,
+      };
     } catch (err) {
       console.error('Failed to toggle set done:', err);
+      const confirmed = confirmedSetValuesRef.current[setId];
+      if (confirmed) {
+        setSets((currentSets) =>
+          currentSets.map((set) => (set.id === setId ? { ...set, isDone: confirmed.isDone } : set))
+        );
+      }
+      setSyncError('No se pudo guardar el estado del set. Reintentá.');
+    } finally {
+      updateSetSyncFlag(setId, 'doneInFlight', false);
     }
+  };
+
+  const scheduleSetDoneUpdate = (setId: string, sessionId: string, isDone: boolean) => {
+    updateSetSyncFlag(setId, 'doneQueued', true);
+    pendingDoneUpdatesRef.current[setId] = { sessionId, isDone };
+
+    const existingTimer = doneDebounceTimersRef.current[setId];
+    if (existingTimer) {
+      globalThis.window.clearTimeout(existingTimer);
+    }
+
+    doneDebounceTimersRef.current[setId] = globalThis.window.setTimeout(() => {
+      updateSetSyncFlag(setId, 'doneQueued', false);
+      updateSetSyncFlag(setId, 'doneInFlight', true);
+      void flushSetDoneUpdate(setId);
+      delete doneDebounceTimersRef.current[setId];
+    }, 220);
+  };
+
+  const handleToggleDone = (setId: string) => {
+    setSyncError('');
+    const set = sets.find((s) => s.id === setId);
+    if (!set) return;
+
+    const nextIsDone = !set.isDone;
+    setSets((currentSets) =>
+      currentSets.map((s) => (s.id === setId ? { ...s, isDone: nextIsDone } : s))
+    );
+    scheduleSetDoneUpdate(setId, set.sessionId, nextIsDone);
   };
 
   const handleOpenCalculator = (weight: number, unit: 'kg' | 'lb') => {
@@ -381,6 +577,20 @@ export default function ExerciseDetailPage() {
   const setCountText = `${sets.length} serie${sets.length > 1 ? 's' : ''}`;
   const headerSetCountText = entrySetCountText ?? setCountText;
 
+  useEffect(() => {
+    if (!syncError) {
+      return;
+    }
+
+    const timeoutId = globalThis.window.setTimeout(() => {
+      setSyncError('');
+    }, 2400);
+
+    return () => {
+      globalThis.window.clearTimeout(timeoutId);
+    };
+  }, [syncError]);
+
 
   if (loading) {
     // Si no hay sets aún, muestra 3 skeletons por defecto
@@ -457,17 +667,24 @@ export default function ExerciseDetailPage() {
           </div>
         </div>
 
+        {syncError && (
+          <div className="mb-4 rounded-lg border border-amber-300/50 bg-amber-300/15 px-3 py-2 text-xs font-semibold text-amber-100">
+            {syncError}
+          </div>
+        )}
+
         {/* Lista de sets tipo tarjetas */}
         <div className="flex flex-col gap-6">
           {sets.map((set, idx) => {
             const isNext = idx === nextSetIndex;
+            const isSavingSet = Boolean(savingSetIds[set.id]);
             return (
               <div
                 key={set.id}
                 className={
                   isNext
                     ? 'relative rounded-2xl bg-accent text-[#101010] shadow-lg p-6 transition-all min-h-30'
-                    : 'panel-soft p-6 text-white min-h-30'
+                    : 'relative panel-soft p-6 text-white min-h-30'
                 }
               >
                 {/* Info principal */}
@@ -484,7 +701,7 @@ export default function ExerciseDetailPage() {
                     <input
                       type="checkbox"
                       checked={set.isDone}
-                      onChange={() => handleToggleDone(set.id, set.isDone)}
+                      onChange={() => handleToggleDone(set.id)}
                       title={`Marcar set ${set.setNumber} como completado`}
                       aria-label={`Marcar set ${set.setNumber} como completado`}
                       className={
@@ -521,6 +738,13 @@ export default function ExerciseDetailPage() {
                   <Calculator size={18} />
                   Calcular Pesos
                 </button>
+
+                {isSavingSet && (
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute bottom-3 right-3 h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(74,222,128,0.95),0_0_20px_rgba(16,185,129,0.7)] animate-pulse"
+                  />
+                )}
               </div>
             );
           })}
