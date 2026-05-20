@@ -155,6 +155,7 @@ export default function WorkoutDayPage() {
   const dragOriginPointRef = useRef<{ x: number; y: number } | null>(null);
   const dragRafIdRef = useRef<number | null>(null);
   const pendingDragPointRef = useRef<{ x: number; y: number } | null>(null);
+  const reorderFrameRef = useRef<number | null>(null);
   const persistReorderTimeoutRef = useRef<number | null>(null);
   const latestOrderedExerciseIdsRef = useRef<string[]>([]);
 
@@ -276,6 +277,10 @@ export default function WorkoutDayPage() {
 
       if (persistReorderTimeoutRef.current !== null) {
         globalThis.window.clearTimeout(persistReorderTimeoutRef.current);
+      }
+
+      if (reorderFrameRef.current !== null) {
+        globalThis.window.cancelAnimationFrame(reorderFrameRef.current);
       }
 
       Object.values(completionAnimationTimersRef.current).forEach((timeoutId) => {
@@ -449,7 +454,7 @@ export default function WorkoutDayPage() {
     }, REORDER_PERSIST_DEBOUNCE_MS);
   };
 
-  const handleDropExercise = async (targetExerciseId: string) => {
+  const handleDropExercise = (targetExerciseId: string) => {
     if (!draggingExerciseId || draggingExerciseId === targetExerciseId) {
       return;
     }
@@ -458,12 +463,21 @@ export default function WorkoutDayPage() {
 
     const reordered = reorderExerciseGroups(exercises, draggingExerciseId, targetExerciseId);
     if (reordered === exercises) {
+      resetDragState();
       return;
     }
 
-    setExercises(reordered);
-    setDragOverExerciseId(null);
-    schedulePersistExerciseOrder(reordered.map((exercise) => exercise.exerciseId));
+    // Clear drag transform first, then commit list reorder to avoid visible jumping.
+    resetDragState();
+    if (reorderFrameRef.current !== null) {
+      globalThis.window.cancelAnimationFrame(reorderFrameRef.current);
+    }
+
+    reorderFrameRef.current = globalThis.window.requestAnimationFrame(() => {
+      setExercises(reordered);
+      schedulePersistExerciseOrder(reordered.map((exercise) => exercise.exerciseId));
+      reorderFrameRef.current = null;
+    });
   };
 
   const resetDragState = () => {
@@ -591,9 +605,7 @@ export default function WorkoutDayPage() {
       return;
     }
 
-    void handleDropExercise(targetExerciseId ?? activeExerciseId).finally(() => {
-      resetDragState();
-    });
+    handleDropExercise(targetExerciseId ?? activeExerciseId);
   };
 
   if (loading) {
@@ -713,9 +725,9 @@ export default function WorkoutDayPage() {
                     setDragOverExerciseId(exerciseGroup.exerciseId);
                   }
                 }}
-                onDrop={async (event) => {
+                onDrop={(event) => {
                   event.preventDefault();
-                  await handleDropExercise(exerciseGroup.exerciseId);
+                  handleDropExercise(exerciseGroup.exerciseId);
                 }}
                 onDragEnd={() => {
                   resetDragState();

@@ -28,11 +28,16 @@ export function ExerciseList({
   const dragOriginPointRef = useRef<{ x: number; y: number } | null>(null);
   const dragRafIdRef = useRef<number | null>(null);
   const pendingDragPointRef = useRef<{ x: number; y: number } | null>(null);
+  const reorderFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
       if (dragRafIdRef.current !== null) {
         globalThis.window.cancelAnimationFrame(dragRafIdRef.current);
+      }
+
+      if (reorderFrameRef.current !== null) {
+        globalThis.window.cancelAnimationFrame(reorderFrameRef.current);
       }
     };
   }, []);
@@ -159,7 +164,17 @@ export function ExerciseList({
     const isDragging = touchDraggingRef.current;
 
     if (isDragging && activeIndex !== null && targetIndex !== null && activeIndex !== targetIndex) {
-      onReorder(activeIndex, targetIndex);
+      // Reset transform first, then reorder to avoid visible jump on drop.
+      resetDragState();
+      if (reorderFrameRef.current !== null) {
+        globalThis.window.cancelAnimationFrame(reorderFrameRef.current);
+      }
+
+      reorderFrameRef.current = globalThis.window.requestAnimationFrame(() => {
+        onReorder(activeIndex, targetIndex);
+        reorderFrameRef.current = null;
+      });
+      return;
     }
 
     resetDragState();
@@ -228,9 +243,15 @@ export function ExerciseList({
               return;
             }
 
-            onReorder(draggingIndex, index);
-            setDraggingIndex(null);
-            setDragOverIndex(null);
+            resetDragState();
+            if (reorderFrameRef.current !== null) {
+              globalThis.window.cancelAnimationFrame(reorderFrameRef.current);
+            }
+
+            reorderFrameRef.current = globalThis.window.requestAnimationFrame(() => {
+              onReorder(draggingIndex, index);
+              reorderFrameRef.current = null;
+            });
           }}
           onDragEnd={() => {
             resetDragState();
