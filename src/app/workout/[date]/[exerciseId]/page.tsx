@@ -265,8 +265,9 @@ export default function ExerciseDetailPage() {
     const loadPlateSettings = async () => {
       try {
         const data = await fetchJsonWithInFlightDedup<{ settings?: { availablePlatesKg?: number[] } }>('/api/user/settings');
-        const fetched = Array.isArray(data.settings?.availablePlatesKg)
-          ? (data.settings.availablePlatesKg as number[])
+        const availablePlates = data.settings?.availablePlatesKg;
+        const fetched = Array.isArray(availablePlates)
+          ? availablePlates
           : [...KG_PLATE_OPTIONS];
 
         setAvailablePlatesKg(KG_PLATE_OPTIONS.filter((plate) => fetched.includes(plate)));
