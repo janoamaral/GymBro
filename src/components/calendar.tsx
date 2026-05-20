@@ -17,7 +17,7 @@ const LIFT_ORDER: LiftMarker[] = ["BP", "DL", "SQ"];
 const LIFT_COLOR_CLASS: Record<LiftMarker, string> = {
   BP: 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.95)]',
   DL: 'bg-violet-400 shadow-[0_0_10px_rgba(167,139,250,0.95)]',
-  SQ: 'bg-fuchsia-400 shadow-[0_0_10px_rgba(232,121,249,0.95)]',
+  SQ: 'bg-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.95)]',
 };
 
 function isLiftMarker(value: string): value is LiftMarker {

@@ -14,7 +14,7 @@ export async function GET() {
 
     const sessions = await db.workoutSession.findMany({
       where: { userId: user.id },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ startedAt: "desc" }, { createdAt: "desc" }],
       include: {
         sets: {
           orderBy: [{ createdAt: "asc" }],
@@ -23,7 +23,7 @@ export async function GET() {
           },
         },
       },
-      take: 20,
+      take: 120,
     });
 
     return NextResponse.json({ sessions });

@@ -51,7 +51,14 @@ export async function GET(request: Request) {
           },
         ],
       },
-      orderBy: { createdAt: "asc" },
+      include: {
+        session: {
+          select: {
+            startedAt: true,
+          },
+        },
+      },
+      orderBy: [{ session: { startedAt: "asc" } }, { createdAt: "asc" }],
       take: 200,
     });
 
@@ -71,7 +78,7 @@ export async function GET(request: Request) {
 
         return {
           id: set.id,
-          date: (set.amrapLoggedAt ?? set.createdAt).toISOString(),
+          date: (set.session.startedAt ?? set.amrapLoggedAt ?? set.createdAt).toISOString(),
           e1rm: effectiveE1rm,
           repsDone: set.repsDone,
           repsTarget: set.repsTarget,

@@ -74,8 +74,8 @@ export function ProgressChart() {
     }
 
     const days = RANGE_DAYS[range];
-    const now = Date.now();
-    const cutoff = now - days * 24 * 60 * 60 * 1000;
+    const latestPointTs = points.at(-1) ? new Date(points.at(-1)!.date).getTime() : null;
+    const cutoff = latestPointTs === null ? Number.NEGATIVE_INFINITY : latestPointTs - days * 24 * 60 * 60 * 1000;
 
     return points.filter((point) => new Date(point.date).getTime() >= cutoff);
   }, [points, range]);
@@ -103,7 +103,11 @@ export function ProgressChart() {
     const parsed = new Date(date);
 
     if (range === 'max') {
-      return parsed.toLocaleDateString('es-ES', { year: '2-digit', month: '2-digit' });
+      return parsed.toLocaleDateString('es-ES', {
+        year: '2-digit',
+        month: '2-digit',
+        day: '2-digit',
+      });
     }
 
     return parsed.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });

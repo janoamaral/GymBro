@@ -46,9 +46,9 @@ const LIFT_THEME: Record<LiftMarker, { card: string; badge: string; accent: stri
     name: 'Deadlift',
   },
   SQ: {
-    card: 'border-fuchsia-300/40 bg-gradient-to-br from-fuchsia-400/18 via-[#11161d] to-[#0e1319]',
-    badge: 'border-fuchsia-300/45 bg-fuchsia-300/15 text-fuchsia-100',
-    accent: 'text-fuchsia-200',
+    card: 'border-orange-300/40 bg-gradient-to-br from-orange-400/18 via-[#11161d] to-[#0e1319]',
+    badge: 'border-orange-300/45 bg-orange-300/15 text-orange-100',
+    accent: 'text-orange-200',
     name: 'Squat',
   },
 };
