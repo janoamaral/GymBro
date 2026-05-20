@@ -100,7 +100,7 @@ export async function POST(request: Request) {
       sessions.push(session);
 
       // For each exercise, generate sets
-      for (const exercise of exercises) {
+      for (const [exerciseIndex, exercise] of exercises.entries()) {
         let exerciseRecord = await db.exercise.findFirst({
           where: {
             name: exercise.name,
@@ -160,6 +160,7 @@ export async function POST(request: Request) {
               data: {
                 sessionId: session.id,
                 exerciseId: exerciseRecord.id,
+                exerciseOrder: exerciseIndex,
                 liftId: exercise.liftId,
                 setNumber: mainSet.setNumber,
                 repsTarget: mainSet.reps,
@@ -187,6 +188,7 @@ export async function POST(request: Request) {
               data: {
                 sessionId: session.id,
                 exerciseId: exerciseRecord.id,
+                exerciseOrder: exerciseIndex,
                 setNumber: index + 1,
                 repsTarget: customSet.reps,
                 targetWeight: customSet.weight,

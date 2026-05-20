@@ -27,6 +27,7 @@ const newCycleSchema = z.object({
 type TemplateSet = {
   exerciseId: string;
   exerciseName: string;
+  exerciseOrder: number;
   liftId: "SQ" | "DL" | "BP" | null;
   setNumber: number;
   repsTarget: number;
@@ -122,9 +123,7 @@ export async function POST(request: Request) {
       },
       include: {
         sets: {
-          orderBy: {
-            setNumber: "asc",
-          },
+          orderBy: [{ exerciseOrder: "asc" }, { setNumber: "asc" }],
           include: {
             exercise: true,
           },
@@ -179,6 +178,7 @@ export async function POST(request: Request) {
       sets: session.sets.map((set) => ({
         exerciseId: set.exerciseId,
         exerciseName: set.exercise.name,
+        exerciseOrder: set.exerciseOrder,
         liftId: set.liftId,
         setNumber: set.setNumber,
         repsTarget: set.repsTarget,
@@ -252,6 +252,7 @@ export async function POST(request: Request) {
                 data: {
                   sessionId: session.id,
                   exerciseId: firstSet.exerciseId,
+                  exerciseOrder: firstSet.exerciseOrder,
                   liftId: firstSet.liftId,
                   setNumber: mainSet.setNumber,
                   repsTarget: mainSet.reps,
@@ -276,6 +277,7 @@ export async function POST(request: Request) {
               data: {
                 sessionId: session.id,
                 exerciseId: templateSet.exerciseId,
+                exerciseOrder: templateSet.exerciseOrder,
                 liftId: templateSet.liftId,
                 setNumber: templateSet.setNumber,
                 repsTarget: templateSet.repsTarget,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Calculator, Dumbbell } from 'lucide-react';
 import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
@@ -40,6 +40,29 @@ type SetSyncState = {
 };
 
 const WORKOUT_CACHE_KEY = 'workout-by-date-cache';
+const inFlightGetRequests = new Map<string, Promise<unknown>>();
+
+const fetchJsonWithInFlightDedup = async <T,>(url: string): Promise<T> => {
+  const existingRequest = inFlightGetRequests.get(url) as Promise<T> | undefined;
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request = fetch(url)
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      return (await response.json()) as T;
+    })
+    .finally(() => {
+      inFlightGetRequests.delete(url);
+    });
+
+  inFlightGetRequests.set(url, request);
+  return request;
+};
 
 const getCachedExerciseSets = (date: string, exerciseId: string): Set[] => {
   if (globalThis.window === undefined) {
@@ -150,39 +173,37 @@ export default function ExerciseDetailPage() {
     });
   };
 
-  const clearExerciseProfile = () => {
+  const clearExerciseProfile = useCallback(() => {
     setExerciseOneRm(null);
     setOneRmUnit(null);
-  };
+  }, []);
 
-  const loadExerciseProfile = async (lift: 'SQ' | 'DL' | 'BP') => {
-    const profileRes = await fetch('/api/training/531/profile');
-    if (!profileRes.ok) {
+  const loadExerciseProfile = useCallback(async (lift: 'SQ' | 'DL' | 'BP') => {
+    try {
+      const profileData = await fetchJsonWithInFlightDedup<{ profiles?: Array<{ liftId: string; oneRm: number; unit: string }> }>(
+        '/api/training/531/profile'
+      );
+
+      const profile = (profileData.profiles ?? []).find((item) => item.liftId === lift);
+
+      if (!profile) {
+        clearExerciseProfile();
+        return;
+      }
+
+      setExerciseOneRm(Number(profile.oneRm));
+      setOneRmUnit(profile.unit as 'kg' | 'lb');
+    } catch {
       clearExerciseProfile();
-      return;
     }
-
-    const profileData = await profileRes.json();
-    const profile = (profileData.profiles ?? []).find(
-      (item: { liftId: string }) => item.liftId === lift
-    );
-
-    if (!profile) {
-      clearExerciseProfile();
-      return;
-    }
-
-    setExerciseOneRm(Number(profile.oneRm));
-    setOneRmUnit(profile.unit as 'kg' | 'lb');
-  };
+  }, [clearExerciseProfile]);
 
   useEffect(() => {
-    setError('');
-
     const cachedSets = getCachedExerciseSets(date, exerciseId);
     const hasCachedSets = cachedSets.length > 0;
 
     if (hasCachedSets) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSets(cachedSets);
       rememberConfirmedValues(cachedSets);
       setLoading(false);
@@ -210,17 +231,12 @@ export default function ExerciseDetailPage() {
       loadExerciseProfile(firstLiftId);
     };
 
-    if (hasCachedSets) {
-      hydrateProfileFromSets(cachedSets);
-    }
-
     // Fetch en background y actualiza si hay cambios
     const fetchExerciseSets = async () => {
-      try {
-        const res = await fetch(`/api/workouts/by-date/${date}`);
-        if (!res.ok) throw new Error('Failed to fetch sessions');
+      setError('');
 
-        const data = await res.json();
+      try {
+        const data = await fetchJsonWithInFlightDedup<{ sessions: SessionWithSets[] }>(`/api/workouts/by-date/${date}`);
         const filteredSets = extractExerciseSets(data.sessions as SessionWithSets[], exerciseId);
 
         setSets(filteredSets);
@@ -243,17 +259,12 @@ export default function ExerciseDetailPage() {
     };
 
     fetchExerciseSets();
-  }, [date, exerciseId]);
+  }, [date, exerciseId, loadExerciseProfile, clearExerciseProfile]);
 
   useEffect(() => {
     const loadPlateSettings = async () => {
       try {
-        const response = await fetch('/api/user/settings');
-        if (!response.ok) {
-          return;
-        }
-
-        const data = await response.json();
+        const data = await fetchJsonWithInFlightDedup<{ settings?: { availablePlatesKg?: number[] } }>('/api/user/settings');
         const fetched = Array.isArray(data.settings?.availablePlatesKg)
           ? (data.settings.availablePlatesKg as number[])
           : [...KG_PLATE_OPTIONS];
@@ -275,6 +286,7 @@ export default function ExerciseDetailPage() {
     try {
       const rawTransitionData = sessionStorage.getItem(SHARED_EXERCISE_TITLE_KEY);
       if (!rawTransitionData) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsTitleEntering(false);
         setIsMetaEntering(false);
         return;

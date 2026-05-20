@@ -55,7 +55,29 @@ export async function POST(
       return NextResponse.json({ error: "EXERCISE_REQUIRED" }, { status: 400 });
     }
 
-    const existingSetsCount = await db.exerciseSet.count({ where: { sessionId } });
+    const [existingSetsCount, existingExerciseSet, lastOrderedSet] = await Promise.all([
+      db.exerciseSet.count({ where: { sessionId } }),
+      db.exerciseSet.findFirst({
+        where: {
+          sessionId,
+          exerciseId,
+        },
+        select: {
+          exerciseOrder: true,
+        },
+      }),
+      db.exerciseSet.findFirst({
+        where: { sessionId },
+        orderBy: {
+          exerciseOrder: "desc",
+        },
+        select: {
+          exerciseOrder: true,
+        },
+      }),
+    ]);
+
+    const exerciseOrder = existingExerciseSet?.exerciseOrder ?? ((lastOrderedSet?.exerciseOrder ?? -1) + 1);
 
     let plateCalc: ReturnType<typeof calculatePlateLoadPerSide> | null = null;
     let barbellWeightForSet: number | null = null;
@@ -73,6 +95,7 @@ export async function POST(
       data: {
         sessionId,
         exerciseId,
+        exerciseOrder,
         liftId: payload.liftId,
         setNumber: existingSetsCount + 1,
         repsTarget: payload.repsTarget,
