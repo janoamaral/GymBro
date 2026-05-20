@@ -9,6 +9,7 @@ const COEFFICIENTS = [
   { key: 'wilks', label: 'Wilks' },
   { key: 'wilks2020', label: 'Wilks 2' },
   { key: 'dots', label: 'DOTS' },
+  { key: 'ipfgl', label: 'IPF GL' },
 ] as const;
 
 // Datos estáticos simulando los valores del plan/usuario
@@ -127,9 +128,7 @@ export function MeetCoefficientsCard() {
         )}
       </div>
 
-      <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-white/3 px-4 py-3 text-sm text-gray-400">
-        IPF GL entra en el siguiente slice de implementación. La base para total y coeficientes relativos ya quedó lista.
-      </div>
+      {/* IPF GL ya implementado */}
     </section>
   );
 }

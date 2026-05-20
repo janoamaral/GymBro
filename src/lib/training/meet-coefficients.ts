@@ -1,7 +1,8 @@
-import { dots, wilks, wilks2020 } from 'powerlifting-formulas';
+import { dots, wilks, wilks2020, glossbrenner } from 'powerlifting-formulas';
 import type { WeightUnit } from '@/lib/units/conversion';
 
 export type MeetSex = 'male' | 'female';
+
 
 export type MeetLiftsInput = {
   squat: number;
@@ -17,6 +18,7 @@ export type MeetCoefficientResult = {
   wilks: number;
   wilks2020: number;
   dots: number;
+  ipfgl: number;
 };
 
 export function calculateMeetTotal(input: Pick<MeetLiftsInput, 'squat' | 'bench' | 'deadlift'>): number {
@@ -43,5 +45,6 @@ export function calculateMeetCoefficients(input: MeetLiftsInput): MeetCoefficien
     wilks: Number(wilks(input.bodyweight, total, gender, input.unit).toFixed(2)),
     wilks2020: Number(wilks2020(input.bodyweight, total, gender, input.unit).toFixed(2)),
     dots: Number(dots(input.bodyweight, total, gender, input.unit).toFixed(2)),
+    ipfgl: Number(glossbrenner(input.bodyweight, total, gender, input.unit).toFixed(2)),
   };
 }
