@@ -87,7 +87,11 @@ export default function ExerciseDetailPage() {
   const [isMetaEntering, setIsMetaEntering] = useState(false);
   const [entryTitle, setEntryTitle] = useState<string | null>(null);
   const [entrySetCountText, setEntrySetCountText] = useState<string | null>(null);
+  const [recentlyCompletedSetIds, setRecentlyCompletedSetIds] = useState<Record<string, boolean>>({});
+  const [isExerciseCompletionAnimating, setIsExerciseCompletionAnimating] = useState(false);
   const metricsDebounceTimersRef = useRef<Record<string, number>>({});
+  const completionAnimationTimersRef = useRef<Record<string, number>>({});
+  const exerciseCompletionTimerRef = useRef<number | null>(null);
   const pendingMetricsUpdatesRef = useRef<
     Record<string, { sessionId: string; updates: Partial<Pick<Set, 'setFeelingScore' | 'rpe' | 'rir'>> }>
   >({});
@@ -315,10 +319,18 @@ export default function ExerciseDetailPage() {
       Object.values(metricsDebounceTimersRef.current).forEach((timeoutId) => {
         globalThis.window.clearTimeout(timeoutId);
       });
+      Object.values(completionAnimationTimersRef.current).forEach((timeoutId) => {
+        globalThis.window.clearTimeout(timeoutId);
+      });
+      if (exerciseCompletionTimerRef.current) {
+        globalThis.window.clearTimeout(exerciseCompletionTimerRef.current);
+      }
       Object.values(doneDebounceTimersRef.current).forEach((timeoutId) => {
         globalThis.window.clearTimeout(timeoutId);
       });
       metricsDebounceTimersRef.current = {};
+      completionAnimationTimersRef.current = {};
+      exerciseCompletionTimerRef.current = null;
       pendingMetricsUpdatesRef.current = {};
       doneDebounceTimersRef.current = {};
       pendingDoneUpdatesRef.current = {};
@@ -485,12 +497,52 @@ export default function ExerciseDetailPage() {
     }, 220);
   };
 
+  const triggerSetCompletionAnimation = (setId: string) => {
+    const existingTimer = completionAnimationTimersRef.current[setId];
+    if (existingTimer) {
+      globalThis.window.clearTimeout(existingTimer);
+    }
+
+    setRecentlyCompletedSetIds((previous) => ({ ...previous, [setId]: true }));
+
+    completionAnimationTimersRef.current[setId] = globalThis.window.setTimeout(() => {
+      setRecentlyCompletedSetIds((previous) => {
+        const next = { ...previous };
+        delete next[setId];
+        return next;
+      });
+      delete completionAnimationTimersRef.current[setId];
+    }, 1100);
+  };
+
+  const triggerExerciseCompletionAnimation = () => {
+    if (exerciseCompletionTimerRef.current) {
+      globalThis.window.clearTimeout(exerciseCompletionTimerRef.current);
+    }
+
+    setIsExerciseCompletionAnimating(true);
+
+    exerciseCompletionTimerRef.current = globalThis.window.setTimeout(() => {
+      setIsExerciseCompletionAnimating(false);
+      exerciseCompletionTimerRef.current = null;
+    }, 760);
+  };
+
   const handleToggleDone = (setId: string) => {
     setSyncError('');
     const set = sets.find((s) => s.id === setId);
     if (!set) return;
 
     const nextIsDone = !set.isDone;
+    const completesExercise = nextIsDone && sets.every((item) => item.id === setId || item.isDone);
+
+    if (nextIsDone) {
+      triggerSetCompletionAnimation(setId);
+      if (completesExercise) {
+        triggerExerciseCompletionAnimation();
+      }
+    }
+
     setSets((currentSets) =>
       currentSets.map((s) => (s.id === setId ? { ...s, isDone: nextIsDone } : s))
     );
@@ -631,6 +683,7 @@ export default function ExerciseDetailPage() {
 
   // Encuentra el primer set no completado (próximo a realizar)
   const nextSetIndex = sets.findIndex((set) => !set.isDone);
+  const allSetsCompleted = sets.length > 0 && sets.every((set) => set.isDone);
 
   return (
     <main className="app-canvas min-h-screen px-4 py-8 sm:px-6 lg:px-8">
@@ -674,10 +727,19 @@ export default function ExerciseDetailPage() {
         )}
 
         {/* Lista de sets tipo tarjetas */}
-        <div className="flex flex-col gap-6">
+        <div
+          className={`flex flex-col gap-6 ${
+            allSetsCompleted && isExerciseCompletionAnimating ? 'exercise-complete-pop' : ''
+          }`}
+        >
           {sets.map((set, idx) => {
             const isNext = idx === nextSetIndex;
             const isSavingSet = Boolean(savingSetIds[set.id]);
+            const isSetCompletionAnimating = Boolean(recentlyCompletedSetIds[set.id]);
+            const repsTextClass =
+              isNext || set.isDone
+                ? 'text-3xl font-black font-heading'
+                : 'text-2xl font-bold font-heading';
             return (
               <div
                 key={set.id}
@@ -693,8 +755,24 @@ export default function ExerciseDetailPage() {
                     <span className="block text-xs font-heading uppercase tracking-widest opacity-70">
                       Serie {set.setNumber}
                     </span>
-                    <span className={isNext ? 'text-3xl font-black font-heading' : 'text-2xl font-bold font-heading'}>
-                      {set.repsTarget} reps @ {set.targetWeight} {set.unit}
+                    <span
+                      className={`set-reps-line ${repsTextClass} ${set.isDone ? 'set-reps-line--done' : ''}`}
+                    >
+                      <span
+                        className={`set-reps-line__label ${
+                          isSetCompletionAnimating ? 'set-reps-line__label--animate' : ''
+                        }`}
+                      >
+                        {set.repsTarget} reps @ {set.targetWeight} {set.unit}
+                      </span>
+                      {set.isDone && (
+                        <span
+                          aria-hidden="true"
+                          className={`set-brush-strike ${
+                            isSetCompletionAnimating ? 'set-brush-strike--animate' : 'set-brush-strike--static'
+                          }`}
+                        />
+                      )}
                     </span>
                   </div>
                   <div className="flex flex-col items-end gap-2">
@@ -765,6 +843,102 @@ export default function ExerciseDetailPage() {
         unit={calculatorUnit}
         availablePlatesKg={availablePlatesKg}
       />
+
+      <style jsx global>{`
+        .set-reps-line {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          line-height: 1.05;
+        }
+
+        .set-reps-line__label {
+          display: inline-block;
+          transform-origin: center center;
+        }
+
+        .set-reps-line__label--animate {
+          animation: set-reps-zoom-in 180ms ease-in both;
+        }
+
+        .set-reps-line--done {
+          color: #ffe7e7;
+        }
+
+        .set-brush-strike {
+          position: absolute;
+          left: -0.08em;
+          right: -0.08em;
+          top: 52%;
+          height: 0.56em;
+          border-radius: 999px;
+          pointer-events: none;
+          background: linear-gradient(90deg, #a50e1b 0%, #ff384f 35%, #ff243f 65%, #9f0817 100%);
+          box-shadow: 0 0 8px rgba(255, 56, 79, 0.45);
+          transform-origin: left center;
+          mix-blend-mode: screen;
+          will-change: transform, opacity;
+        }
+
+        .set-brush-strike--animate {
+          animation: brush-strike-draw 620ms cubic-bezier(0.23, 1, 0.32, 1) 150ms both;
+        }
+
+        .set-brush-strike--static {
+          opacity: 0.88;
+          transform: translateY(-50%) scaleX(1);
+        }
+
+        .exercise-complete-pop {
+          animation: exercise-complete-pop 760ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        @keyframes set-reps-zoom-in {
+          0% {
+            transform: scale(1.22);
+          }
+          55% {
+            transform: scale(1.04);
+          }
+          100% {
+            transform: scale(1);
+          }
+        }
+
+        @keyframes brush-strike-draw {
+          0% {
+            opacity: 0;
+            transform: translateY(-50%) scaleX(0.08) rotate(-2deg);
+          }
+          40% {
+            opacity: 1;
+            transform: translateY(-50%) scaleX(1.04) rotate(-1deg);
+          }
+          70% {
+            opacity: 0.96;
+            transform: translateY(-50%) scaleX(0.98) rotate(-0.5deg);
+          }
+          100% {
+            opacity: 0.88;
+            transform: translateY(-50%) scaleX(1) rotate(0deg);
+          }
+        }
+
+        @keyframes exercise-complete-pop {
+          0% {
+            transform: scale(1);
+            filter: drop-shadow(0 0 0 rgba(214, 255, 67, 0));
+          }
+          35% {
+            transform: scale(1.015);
+            filter: drop-shadow(0 0 16px rgba(214, 255, 67, 0.35));
+          }
+          100% {
+            transform: scale(1);
+            filter: drop-shadow(0 0 0 rgba(214, 255, 67, 0));
+          }
+        }
+      `}</style>
     </main>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CalendarDays, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -113,6 +113,9 @@ export default function WorkoutDayPage() {
   const [transitioning, setTransitioning] = useState(false);
   const [targetRoute, setTargetRoute] = useState<string | null>(null);
   const [transitioningExerciseId, setTransitioningExerciseId] = useState<string | null>(null);
+  const [recentlyCompletedExerciseIds, setRecentlyCompletedExerciseIds] = useState<Record<string, boolean>>({});
+  const completionAnimationTimersRef = useRef<Record<string, number>>({});
+  const previousExerciseCompletionRef = useRef<Record<string, boolean>>({});
 
   // Hidrata desde cache localStorage primero
   useEffect(() => {
@@ -171,6 +174,63 @@ export default function WorkoutDayPage() {
 
     return () => clearTimeout(timeout);
   }, [transitioning, targetRoute, router]);
+
+  const clearCompletedExerciseAnimation = (exerciseId: string) => {
+    setRecentlyCompletedExerciseIds((previous) => {
+      const next = { ...previous };
+      delete next[exerciseId];
+      return next;
+    });
+    delete completionAnimationTimersRef.current[exerciseId];
+  };
+
+  const triggerCompletedExerciseAnimation = (exerciseId: string) => {
+    const existingTimer = completionAnimationTimersRef.current[exerciseId];
+    if (existingTimer) {
+      globalThis.window.clearTimeout(existingTimer);
+    }
+
+    setRecentlyCompletedExerciseIds((previous) => ({
+      ...previous,
+      [exerciseId]: true,
+    }));
+
+    completionAnimationTimersRef.current[exerciseId] = globalThis.window.setTimeout(() => {
+      clearCompletedExerciseAnimation(exerciseId);
+    }, 1100);
+  };
+
+  useEffect(() => {
+    const currentCompletionState = Object.fromEntries(
+      exercises.map((exerciseGroup) => [
+        exerciseGroup.exerciseId,
+        exerciseGroup.sets.length > 0 && exerciseGroup.sets.every((set) => Boolean(set.isDone)),
+      ])
+    );
+
+    exercises.forEach((exerciseGroup) => {
+      const isCompleted = currentCompletionState[exerciseGroup.exerciseId];
+      const wasCompleted = previousExerciseCompletionRef.current[exerciseGroup.exerciseId] ?? false;
+
+      if (!isCompleted || wasCompleted) {
+        return;
+      }
+
+      triggerCompletedExerciseAnimation(exerciseGroup.exerciseId);
+    });
+
+    previousExerciseCompletionRef.current = currentCompletionState;
+  }, [exercises]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(completionAnimationTimersRef.current).forEach((timeoutId) => {
+        globalThis.window.clearTimeout(timeoutId);
+      });
+      completionAnimationTimersRef.current = {};
+      previousExerciseCompletionRef.current = {};
+    };
+  }, []);
 
   const [yearPart, monthPart, dayPart] = date.split('-').map(Number);
   const hasValidDateParts =
@@ -379,6 +439,9 @@ export default function WorkoutDayPage() {
           {exercises.map((exerciseGroup, idx) => {
             const isNext = idx === nextExerciseIndex;
             const isSelected = transitioningExerciseId === exerciseGroup.exerciseId;
+            const isComplete =
+              exerciseGroup.sets.length > 0 && exerciseGroup.sets.every((set) => Boolean(set.isDone));
+            const isCompletionAnimating = Boolean(recentlyCompletedExerciseIds[exerciseGroup.exerciseId]);
             const baseCardClass = isNext
               ? 'relative rounded-2xl bg-accent text-[#101010] shadow-lg p-6 text-left transition-all min-h-25'
               : 'panel-soft p-6 text-white text-left transition-all min-h-25';
@@ -406,9 +469,23 @@ export default function WorkoutDayPage() {
                 </div>
                 <span
                   data-exercise-title
-                  className={`${isNext ? 'text-3xl font-black font-heading' : 'text-2xl font-bold font-heading'} transition-all duration-200 ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-8 scale-110 opacity-70' : ''}`}
+                  className={`set-card-title ${isNext || isComplete ? 'text-3xl font-black font-heading' : 'text-2xl font-bold font-heading'} ${isComplete ? 'set-card-title--done' : ''} transition-all duration-200 ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-8 scale-110 opacity-70' : ''}`}
                 >
-                  {exerciseGroup.exerciseName}
+                  <span
+                    className={`set-card-title__label ${
+                      isCompletionAnimating ? 'set-card-title__label--animate' : ''
+                    }`}
+                  >
+                    {exerciseGroup.exerciseName}
+                  </span>
+                  {isComplete && (
+                    <span
+                      aria-hidden="true"
+                      className={`set-card-brush-strike ${
+                        isCompletionAnimating ? 'set-card-brush-strike--animate' : 'set-card-brush-strike--static'
+                      }`}
+                    />
+                  )}
                 </span>
               </button>
             );
@@ -493,6 +570,83 @@ export default function WorkoutDayPage() {
           </div>
         </div>
       </Modal>
+
+      <style jsx global>{`
+        .set-card-title {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          line-height: 1.05;
+        }
+
+        .set-card-title--done {
+          color: #ffe7e7;
+        }
+
+        .set-card-title__label {
+          display: inline-block;
+          transform-origin: center center;
+        }
+
+        .set-card-title__label--animate {
+          animation: set-card-title-zoom-in 180ms ease-in both;
+        }
+
+        .set-card-brush-strike {
+          position: absolute;
+          left: -0.08em;
+          right: -0.08em;
+          top: 52%;
+          height: 0.56em;
+          border-radius: 999px;
+          pointer-events: none;
+          background: linear-gradient(90deg, #a50e1b 0%, #ff384f 35%, #ff243f 65%, #9f0817 100%);
+          box-shadow: 0 0 8px rgba(255, 56, 79, 0.45);
+          transform-origin: left center;
+          mix-blend-mode: screen;
+          will-change: transform, opacity;
+        }
+
+        .set-card-brush-strike--animate {
+          animation: set-card-brush-strike-draw 620ms cubic-bezier(0.23, 1, 0.32, 1) 150ms both;
+        }
+
+        .set-card-brush-strike--static {
+          opacity: 0.88;
+          transform: translateY(-50%) scaleX(1);
+        }
+
+        @keyframes set-card-title-zoom-in {
+          0% {
+            transform: scale(1.22);
+          }
+          55% {
+            transform: scale(1.04);
+          }
+          100% {
+            transform: scale(1);
+          }
+        }
+
+        @keyframes set-card-brush-strike-draw {
+          0% {
+            opacity: 0;
+            transform: translateY(-50%) scaleX(0.08) rotate(-2deg);
+          }
+          40% {
+            opacity: 1;
+            transform: translateY(-50%) scaleX(1.04) rotate(-1deg);
+          }
+          70% {
+            opacity: 0.96;
+            transform: translateY(-50%) scaleX(0.98) rotate(-0.5deg);
+          }
+          100% {
+            opacity: 0.88;
+            transform: translateY(-50%) scaleX(1) rotate(0deg);
+          }
+        }
+      `}</style>
     </main>
   );
 }
