@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="GymBro maskable">
+  <rect width="512" height="512" fill="#020202"/>
+  <circle cx="256" cy="256" r="188" fill="#0f141a" stroke="#d6ff43" stroke-width="12"/>
+  <path d="M126 256h68m192 0h68M196 198v116m120-116v116" stroke="#d6ff43" stroke-width="28" stroke-linecap="round"/>
+  <rect x="226" y="226" width="60" height="60" rx="18" fill="#d6ff43"/>
+</svg>

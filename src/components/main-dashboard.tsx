@@ -10,6 +10,7 @@ import { NextWorkout } from '@/components/next-workout';
 import { NewCycleModal } from '@/components/new-cycle-modal';
 import { VolumeByLiftCard } from '@/components/volume-by-lift-card';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
+import { cacheResource, getCachedResource } from '@/lib/offline-queue';
 
 interface MainDashboardProps {
   readonly userName: string;
@@ -35,6 +36,26 @@ export default function MainDashboard({
   const month = currentDate.getMonth();
 
   useEffect(() => {
+    let cancelled = false;
+
+    const cacheKey = `calendar:${year}-${String(month + 1).padStart(2, '0')}`;
+
+    const hydrateCachedCalendar = async () => {
+      try {
+        const cached = await getCachedResource<CalendarDateItem[]>(cacheKey);
+        if (cancelled || !cached) {
+          return;
+        }
+
+        setWorkoutDays(cached);
+        setLoading(false);
+      } catch {
+        // Ignora errores de cache local.
+      }
+    };
+
+    void hydrateCachedCalendar();
+
     // Fetch calendar data for current month
     const fetchCalendarData = async () => {
       try {
@@ -46,17 +67,30 @@ export default function MainDashboard({
           `/api/workouts/calendar?from=${from}&to=${to}`
         );
 
+        if (cancelled) {
+          return;
+        }
+
         if (data.dates) {
           setWorkoutDays(data.dates);
+          await cacheResource(cacheKey, data.dates);
         }
       } catch (error) {
-        console.error('Failed to fetch calendar data:', error);
+        if (navigator.onLine) {
+          console.error('Failed to fetch calendar data:', error);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchCalendarData();
+    void fetchCalendarData();
+
+    return () => {
+      cancelled = true;
+    };
   }, [year, month]);
 
   const handleMonthChange = (newYear: number, newMonth: number) => {

@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
+import { cacheResource, getCachedResource } from '@/lib/offline-queue';
 
 interface ProgressPoint {
   id: string;
@@ -40,6 +41,29 @@ export function ProgressChart() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const cacheKey = `progress:${liftId}`;
+
+    const hydrateCachedProgress = async () => {
+      try {
+        const cached = await getCachedResource<ProgressPoint[]>(cacheKey);
+        if (cancelled || !cached) {
+          return;
+        }
+
+        const sorted = cached
+          .slice()
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        setPoints(sorted);
+        setLoading(false);
+      } catch {
+        // Ignora errores de cache local.
+      }
+    };
+
+    void hydrateCachedProgress();
+
     const fetchData = async () => {
       setLoading(true);
 
@@ -54,16 +78,29 @@ export function ProgressChart() {
               .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
           : [];
 
+        if (cancelled) {
+          return;
+        }
+
         setPoints(nextPoints);
+        await cacheResource(cacheKey, nextPoints);
       } catch (error) {
-        console.error('Failed to fetch progress data:', error);
-        setPoints([]);
+        if (!cancelled && navigator.onLine) {
+          console.error('Failed to fetch progress data:', error);
+          setPoints([]);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchData();
+    void fetchData();
+
+    return () => {
+      cancelled = true;
+    };
   }, [liftId]);
 
   const filteredPoints = useMemo(() => {

@@ -7,6 +7,14 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Modal } from '@/components/ui/modal';
 import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
+import {
+  cacheWorkoutDay,
+  clearCachedWorkoutDay,
+  enqueueDeleteWorkoutMutation,
+  enqueueReorderMutation,
+  enqueueRescheduleMutation,
+  getCachedWorkoutDay,
+} from '@/lib/offline-queue';
 
 const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
 const TOUCH_DRAG_THRESHOLD_PX = 12;
@@ -120,9 +128,6 @@ function reorderExerciseGroups(
   }));
 }
 
-
-const WORKOUT_CACHE_KEY = 'workout-by-date-cache';
-
 export default function WorkoutDayPage() {
   const router = useRouter();
   const params = useParams();
@@ -168,22 +173,28 @@ export default function WorkoutDayPage() {
   const completionAnimationTimersRef = useRef<Record<string, number>>({});
   const previousExerciseCompletionRef = useRef<Record<string, boolean>>({});
 
-  // Hidrata desde cache localStorage primero
   useEffect(() => {
-    try {
-      const cacheRaw = localStorage.getItem(WORKOUT_CACHE_KEY);
-      if (cacheRaw) {
-        const cache = JSON.parse(cacheRaw);
-        if (cache[date]) {
-          const fetchedSessions = cache[date] as SessionWithSets[];
-          queueMicrotask(() => {
-            setSessions(fetchedSessions);
-            setExercises(groupSetsByExercise(fetchedSessions));
-            setLoading(false);
-          });
+    let cancelled = false;
+    let hasCachedData = false;
+
+    const hydrateFromCache = async () => {
+      try {
+        const cached = await getCachedWorkoutDay(date);
+        if (cancelled || !cached) {
+          return;
         }
+
+        const fetchedSessions = cached as SessionWithSets[];
+        hasCachedData = true;
+        setSessions(fetchedSessions);
+        setExercises(groupSetsByExercise(fetchedSessions));
+        setLoading(false);
+      } catch {
+        // Ignora errores de cache para no bloquear render.
       }
-    } catch {}
+    };
+
+    void hydrateFromCache();
 
     // Fetch en background y actualiza si hay cambios
     const fetchSessionsForDay = async () => {
@@ -192,23 +203,29 @@ export default function WorkoutDayPage() {
           `/api/workouts/by-date/${date}`
         );
         const fetchedSessions = data.sessions;
+        if (cancelled) {
+          return;
+        }
+
         setSessions(fetchedSessions);
         setExercises(groupSetsByExercise(fetchedSessions));
-        // Actualiza cache
-        try {
-          const cacheRaw = localStorage.getItem(WORKOUT_CACHE_KEY);
-          const cache = cacheRaw ? JSON.parse(cacheRaw) : {};
-          cache[date] = fetchedSessions;
-          localStorage.setItem(WORKOUT_CACHE_KEY, JSON.stringify(cache));
-        } catch {}
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
+        await cacheWorkoutDay(date, fetchedSessions);
+      } catch {
+        if (!cancelled && !hasCachedData) {
+          setError('Sin internet y sin cache local para este día.');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchSessionsForDay();
+    void fetchSessionsForDay();
+
+    return () => {
+      cancelled = true;
+    };
   }, [date]);
 
   useEffect(() => {
@@ -338,9 +355,16 @@ export default function WorkoutDayPage() {
         throw new Error('No se pudo eliminar el workout');
       }
 
+      await clearCachedWorkoutDay(date);
       router.push('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      if (!navigator.onLine || err instanceof TypeError) {
+        await Promise.all(sessionIds.map((sessionId) => enqueueDeleteWorkoutMutation(sessionId)));
+        await clearCachedWorkoutDay(date);
+        router.push('/');
+      } else {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      }
     } finally {
       setDeleting(false);
       setShowDeleteConfirm(false);
@@ -382,9 +406,20 @@ export default function WorkoutDayPage() {
         throw new Error('No se pudo reprogramar el workout');
       }
 
+      await clearCachedWorkoutDay(date);
       router.push(`/workout/${rescheduleDate}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      if (!navigator.onLine || err instanceof TypeError) {
+        await Promise.all(
+          sessionIds.map((sessionId) =>
+            enqueueRescheduleMutation(sessionId, rescheduleDate, rescheduleReason.trim() || null)
+          )
+        );
+        await clearCachedWorkoutDay(date);
+        router.push(`/workout/${rescheduleDate}`);
+      } else {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      }
     } finally {
       setRescheduling(false);
       setShowRescheduleModal(false);
@@ -450,7 +485,11 @@ export default function WorkoutDayPage() {
       try {
         await persistExerciseOrder(latestOrderedExerciseIdsRef.current);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'No se pudo reordenar');
+        if (!navigator.onLine || err instanceof TypeError) {
+          await enqueueReorderMutation(date, latestOrderedExerciseIdsRef.current);
+        } else {
+          setError(err instanceof Error ? err.message : 'No se pudo reordenar');
+        }
       }
     }, REORDER_PERSIST_DEBOUNCE_MS);
   };

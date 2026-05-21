@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { CalendarDays } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
+import { cacheResource, cacheWorkoutDay, getCachedResource } from '@/lib/offline-queue';
 
 interface Set {
   id: string;
@@ -97,26 +99,68 @@ function formatIsoDateLabel(isoDate: string): string {
 }
 
 export function NextWorkout() {
+  const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const hydrateCachedNextWorkout = async () => {
+      try {
+        const cached = await getCachedResource<Session | null>('next-workout');
+        if (cancelled || cached === null) {
+          return;
+        }
+
+        setSession(cached);
+        setLoading(false);
+      } catch {
+        // Ignora errores de cache local.
+      }
+    };
+
+    void hydrateCachedNextWorkout();
+
     const fetchNextWorkout = async () => {
       try {
         const localDate = formatLocalDate(new Date());
         const data = await fetchJsonWithInFlightDedup<{ session: Session | null }>(
           `/api/workouts/next?localDate=${localDate}`
         );
+        if (cancelled) {
+          return;
+        }
+
         setSession(data.session);
+        await cacheResource('next-workout', data.session);
+        if (data.session) {
+          const sessionDate = data.session.startedAt.split('T')[0] ?? formatLocalDate(new Date(data.session.startedAt));
+          await cacheWorkoutDay(sessionDate, [data.session]);
+
+          router.prefetch(`/workout/${sessionDate}`);
+          const exerciseIds = Array.from(new Set(data.session.sets.map((set) => set.exercise.id)));
+          exerciseIds.forEach((exerciseId) => {
+            router.prefetch(`/workout/${sessionDate}/${exerciseId}`);
+          });
+        }
       } catch (error) {
-        console.error('Failed to fetch next workout:', error);
+        if (!cancelled && navigator.onLine) {
+          console.error('Failed to fetch next workout:', error);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchNextWorkout();
-  }, []);
+    void fetchNextWorkout();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   if (loading) {
     return (
