@@ -5,6 +5,7 @@ import { SharedElementProvider } from "@/components/ui/shared-element-provider";
 import { GlobalHamburger } from "@/components/global-hamburger";
 import { PwaBoot } from "@/components/pwa-boot";
 import { OfflineSyncStatus } from "@/components/offline-sync-status";
+import { OfflineWorkoutWarmup } from "@/components/offline-workout-warmup";
 
 const heading = Bebas_Neue({
   variable: "--font-heading",
@@ -42,6 +43,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <PwaBoot />
+        <OfflineWorkoutWarmup />
         <SharedElementProvider>
           <GlobalHamburger />
           {children}

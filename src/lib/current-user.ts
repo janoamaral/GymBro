@@ -3,6 +3,23 @@ import { db } from "@/lib/db";
 import { UnauthorizedError } from "@/lib/http-errors";
 
 export async function getOrCreateCurrentUser() {
+  if (process.env.E2E_AUTH_BYPASS === "true") {
+    const auth0Id = "e2e-user";
+
+    return db.user.upsert({
+      where: { auth0Id },
+      update: {
+        email: "e2e@gymbro.local",
+        name: "E2E User",
+      },
+      create: {
+        auth0Id,
+        email: "e2e@gymbro.local",
+        name: "E2E User",
+      },
+    });
+  }
+
   const session = await auth0.getSession();
 
   if (!session?.user?.sub) {

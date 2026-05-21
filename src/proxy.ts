@@ -1,6 +1,10 @@
 import { auth0 } from "./lib/auth0";
 
 export async function proxy(request: Request) {
+  if (process.env.E2E_AUTH_BYPASS === "true") {
+    return;
+  }
+
   return await auth0.middleware(request);
 }
 

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { CalendarDays } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
-import { cacheResource, getCachedResource } from '@/lib/offline-queue';
+import { cacheResource, cacheWorkoutDay, getCachedResource } from '@/lib/offline-queue';
 
 interface Set {
   id: string;
@@ -98,6 +99,7 @@ function formatIsoDateLabel(isoDate: string): string {
 }
 
 export function NextWorkout() {
+  const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -132,6 +134,16 @@ export function NextWorkout() {
 
         setSession(data.session);
         await cacheResource('next-workout', data.session);
+        if (data.session) {
+          const sessionDate = data.session.startedAt.split('T')[0] ?? formatLocalDate(new Date(data.session.startedAt));
+          await cacheWorkoutDay(sessionDate, [data.session]);
+
+          router.prefetch(`/workout/${sessionDate}`);
+          const exerciseIds = Array.from(new Set(data.session.sets.map((set) => set.exercise.id)));
+          exerciseIds.forEach((exerciseId) => {
+            router.prefetch(`/workout/${sessionDate}/${exerciseId}`);
+          });
+        }
       } catch (error) {
         if (!cancelled && navigator.onLine) {
           console.error('Failed to fetch next workout:', error);
@@ -148,7 +160,7 @@ export function NextWorkout() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   if (loading) {
     return (

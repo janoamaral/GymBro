@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:unit": "tsx --test tests/unit/**/*.test.ts",
+    "test:e2e": "playwright test",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",

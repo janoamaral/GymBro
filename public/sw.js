@@ -35,6 +35,32 @@ function isCacheableApi(requestUrl) {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone();
+          void caches.open(SHELL_CACHE).then((cache) => cache.put(request, copy));
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(request);
+          if (cached) {
+            return cached;
+          }
+
+          const shell = await caches.match('/');
+          if (shell) {
+            return shell;
+          }
+
+          return new Response('Offline', { status: 503, statusText: 'Offline' });
+        })
+    );
+    return;
+  }
+
   if (request.method !== 'GET') {
     return;
   }
@@ -79,18 +105,5 @@ self.addEventListener('fetch', (event) => {
       })
     );
     return;
-  }
-
-  if (requestUrl.pathname === '/') {
-    event.respondWith(
-      fetch(request).catch(async () => {
-        const cached = await caches.match('/');
-        if (cached) {
-          return cached;
-        }
-
-        return new Response('Offline', { status: 503, statusText: 'Offline' });
-      })
-    );
   }
 });

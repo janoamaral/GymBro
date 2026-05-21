@@ -37,9 +37,20 @@ pnpm dev
 ```bash
 pnpm lint
 pnpm test:unit
+pnpm test:e2e
 pnpm prisma:studio
 pnpm prisma:migrate:dev --name init
 ```
+
+## E2E offline sync tests
+
+- Run with:
+
+```bash
+pnpm test:e2e
+```
+
+- E2E uses a local auth bypass (`E2E_AUTH_BYPASS=true`) only for Playwright webServer.
 
 ## Vercel database env vars
 

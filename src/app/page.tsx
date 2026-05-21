@@ -3,6 +3,18 @@ import { getOrCreateCurrentUser } from "@/lib/current-user";
 import MainDashboard from "@/components/main-dashboard";
 
 export default async function Home() {
+  if (process.env.E2E_AUTH_BYPASS === "true") {
+    const user = await getOrCreateCurrentUser();
+    const userName = user.displayName ?? user.name ?? "E2E User";
+
+    return (
+      <MainDashboard
+        userName={userName}
+        userPicture={user.avatarUrl}
+      />
+    );
+  }
+
   const session = await auth0.getSession();
 
   if (!session) {
