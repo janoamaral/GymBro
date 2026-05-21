@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
+import { cacheResource, getCachedResource } from '@/lib/offline-queue';
 
 type LiftId = 'SQ' | 'DL' | 'BP';
 
@@ -113,6 +114,24 @@ export function VolumeByLiftCard() {
   useEffect(() => {
     let isActive = true;
 
+    const cacheKey = 'volume-by-lift-7d';
+
+    const hydrateCachedVolume = async () => {
+      try {
+        const cached = await getCachedResource<VolumeSummary[]>(cacheKey);
+        if (!isActive || !cached) {
+          return;
+        }
+
+        setSummaries(cached);
+        setLoading(false);
+      } catch {
+        // Ignora errores de cache local.
+      }
+    };
+
+    void hydrateCachedVolume();
+
     const loadVolume = async () => {
       try {
         setLoading(true);
@@ -127,13 +146,17 @@ export function VolumeByLiftCard() {
           return;
         }
 
-        setSummaries(accumulateVolume(sessions));
+        const nextSummaries = accumulateVolume(sessions);
+        setSummaries(nextSummaries);
+        await cacheResource(cacheKey, nextSummaries);
       } catch (fetchError) {
         if (!isActive) {
           return;
         }
 
-        setError(fetchError instanceof Error ? fetchError.message : 'FAILED_TO_LOAD_VOLUME');
+        if (navigator.onLine) {
+          setError(fetchError instanceof Error ? fetchError.message : 'FAILED_TO_LOAD_VOLUME');
+        }
       } finally {
         if (isActive) {
           setLoading(false);

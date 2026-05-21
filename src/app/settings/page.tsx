@@ -5,6 +5,11 @@ import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
+import {
+  listOfflineQueueMutations,
+  offlineSyncEventName,
+  type QueueMutation,
+} from '@/lib/offline-queue';
 
 type LiftId = 'SQ' | 'DL' | 'BP';
 
@@ -30,6 +35,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error'>('success');
+  const [pendingMutations, setPendingMutations] = useState<QueueMutation[]>([]);
 
   const showMessage = (text: string, type: 'success' | 'error' = 'success') => {
     setMessageType(type);
@@ -100,6 +106,36 @@ export default function SettingsPage() {
     };
 
     fetchSettings();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPendingMutations = async () => {
+      try {
+        const queued = await listOfflineQueueMutations();
+        if (!cancelled) {
+          setPendingMutations(queued);
+        }
+      } catch {
+        if (!cancelled) {
+          setPendingMutations([]);
+        }
+      }
+    };
+
+    void loadPendingMutations();
+
+    const handleSyncUpdate = () => {
+      void loadPendingMutations();
+    };
+
+    window.addEventListener(offlineSyncEventName, handleSyncUpdate);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(offlineSyncEventName, handleSyncUpdate);
+    };
   }, []);
 
   const handleSave = async () => {
@@ -417,6 +453,30 @@ export default function SettingsPage() {
                         <option value="lb">lb</option>
                       </select>
                     </label>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-gray-700 pt-6">
+            <h2 className="text-lg font-semibold text-white">Debug offline</h2>
+            <p className="mt-1 text-xs text-gray-400">
+              Cola local de cambios pendientes de sincronización.
+            </p>
+
+            {pendingMutations.length === 0 ? (
+              <p className="mt-3 text-sm text-gray-300">No hay cambios pendientes.</p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {pendingMutations.map((mutation) => (
+                  <div
+                    key={mutation.id}
+                    className="rounded-lg border border-white/10 bg-[#141a22] px-3 py-2 text-xs text-gray-200"
+                  >
+                    <p className="font-semibold uppercase tracking-[0.08em]">{mutation.type}</p>
+                    <p className="mt-1 text-gray-400">target: {mutation.targetId}</p>
+                    <p className="text-gray-400">intentos: {mutation.attempts}</p>
                   </div>
                 ))}
               </div>

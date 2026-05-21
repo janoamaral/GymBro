@@ -7,9 +7,11 @@ import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 import {
-  acknowledgeOfflineSetMutationFields,
-  enqueueOfflineSetMutation,
-  flushOfflineSetMutationQueue,
+  acknowledgeSetMutationFields,
+  cacheWorkoutDay,
+  enqueueSetMutation,
+  flushOfflineMutationQueue,
+  getCachedWorkoutDay,
 } from '@/lib/offline-queue';
 
 const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
@@ -45,27 +47,6 @@ type SetSyncState = {
   doneInFlight: boolean;
 };
 
-const WORKOUT_CACHE_KEY = 'workout-by-date-cache';
-
-const getCachedExerciseSets = (date: string, exerciseId: string): Set[] => {
-  if (globalThis.window === undefined) {
-    return [];
-  }
-
-  try {
-    const cacheRaw = localStorage.getItem(WORKOUT_CACHE_KEY);
-    if (!cacheRaw) {
-      return [];
-    }
-
-    const cache = JSON.parse(cacheRaw) as Record<string, SessionWithSets[]>;
-    const sessions = cache[date] ?? [];
-    return extractExerciseSets(sessions, exerciseId);
-  } catch {
-    return [];
-  }
-};
-
 const extractExerciseSets = (sessions: SessionWithSets[], exerciseId: string): Set[] =>
   sessions
     .flatMap((session) => session.sets)
@@ -77,8 +58,8 @@ export default function ExerciseDetailPage() {
   const date = params.date as string;
   const exerciseId = params.exerciseId as string;
 
-  const [sets, setSets] = useState<Set[]>(() => getCachedExerciseSets(date, exerciseId));
-  const [loading, setLoading] = useState(() => getCachedExerciseSets(date, exerciseId).length === 0);
+  const [sets, setSets] = useState<Set[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [syncError, setSyncError] = useState('');
   const [savingSetIds, setSavingSetIds] = useState<Record<string, boolean>>({});
@@ -182,17 +163,31 @@ export default function ExerciseDetailPage() {
   }, [clearExerciseProfile]);
 
   useEffect(() => {
-    const cachedSets = getCachedExerciseSets(date, exerciseId);
-    const hasCachedSets = cachedSets.length > 0;
+    let cancelled = false;
+    let hasCachedSets = false;
 
-    if (hasCachedSets) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSets(cachedSets);
-      rememberConfirmedValues(cachedSets);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
+    const hydrateCachedSets = async () => {
+      try {
+        const cachedSessions = await getCachedWorkoutDay(date);
+        if (cancelled || !cachedSessions) {
+          return;
+        }
+
+        const cachedSets = extractExerciseSets(cachedSessions as SessionWithSets[], exerciseId);
+        if (cachedSets.length === 0) {
+          return;
+        }
+
+        hasCachedSets = true;
+        setSets(cachedSets);
+        rememberConfirmedValues(cachedSets);
+        setLoading(false);
+      } catch {
+        // Ignora errores de cache local.
+      }
+    };
+
+    void hydrateCachedSets();
 
     const hydrateProfileFromSets = (sourceSets: Set[]) => {
       const firstSet = sourceSets[0];
@@ -220,28 +215,33 @@ export default function ExerciseDetailPage() {
 
       try {
         const data = await fetchJsonWithInFlightDedup<{ sessions: SessionWithSets[] }>(`/api/workouts/by-date/${date}`);
+        if (cancelled) {
+          return;
+        }
+
         const filteredSets = extractExerciseSets(data.sessions as SessionWithSets[], exerciseId);
 
         setSets(filteredSets);
         rememberConfirmedValues(filteredSets);
-
-        // Actualiza cache
-        try {
-          const cacheRaw = localStorage.getItem(WORKOUT_CACHE_KEY);
-          const cache = cacheRaw ? JSON.parse(cacheRaw) : {};
-          cache[date] = data.sessions;
-          localStorage.setItem(WORKOUT_CACHE_KEY, JSON.stringify(cache));
-        } catch {}
+        await cacheWorkoutDay(date, data.sessions);
 
         hydrateProfileFromSets(filteredSets);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
+      } catch {
+        if (!cancelled && !hasCachedSets) {
+          setError('Sin internet y sin cache local para este ejercicio.');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchExerciseSets();
+    void fetchExerciseSets();
+
+    return () => {
+      cancelled = true;
+    };
   }, [date, exerciseId, loadExerciseProfile, clearExerciseProfile]);
 
   useEffect(() => {
@@ -344,7 +344,7 @@ export default function ExerciseDetailPage() {
       return;
     }
 
-    void flushOfflineSetMutationQueue();
+    void flushOfflineMutationQueue();
   }, []);
 
   const flushSetMetricsUpdate = async (setId: string) => {
@@ -364,7 +364,7 @@ export default function ExerciseDetailPage() {
 
       if (!res.ok) {
         if (res.status === 429 || res.status >= 500) {
-          enqueueOfflineSetMutation(pending.sessionId, setId, pending.updates);
+          await enqueueSetMutation(setId, pending.sessionId, pending.updates);
           setSyncError('Sincronización pendiente. Se reintentará automáticamente.');
           return;
         }
@@ -377,13 +377,13 @@ export default function ExerciseDetailPage() {
         ...confirmed,
         ...pending.updates,
       };
-      acknowledgeOfflineSetMutationFields(
+      await acknowledgeSetMutationFields(
         setId,
         Object.keys(pending.updates) as Array<'setFeelingScore' | 'rpe' | 'rir'>
       );
     } catch (err) {
       if (!navigator.onLine || err instanceof TypeError) {
-        enqueueOfflineSetMutation(pending.sessionId, setId, pending.updates);
+        await enqueueSetMutation(setId, pending.sessionId, pending.updates);
         setSyncError('Guardado offline. Se sincronizará cuando vuelva internet.');
       } else {
         console.error('Failed to update set metrics:', err);
@@ -486,7 +486,7 @@ export default function ExerciseDetailPage() {
 
       if (!res.ok) {
         if (res.status === 429 || res.status >= 500) {
-          enqueueOfflineSetMutation(pending.sessionId, setId, { isDone: pending.isDone });
+          await enqueueSetMutation(setId, pending.sessionId, { isDone: pending.isDone });
           setSyncError('Sincronización pendiente. Se reintentará automáticamente.');
           return;
         }
@@ -499,10 +499,10 @@ export default function ExerciseDetailPage() {
         ...confirmed,
         isDone: pending.isDone,
       };
-      acknowledgeOfflineSetMutationFields(setId, ['isDone']);
+      await acknowledgeSetMutationFields(setId, ['isDone']);
     } catch (err) {
       if (!navigator.onLine || err instanceof TypeError) {
-        enqueueOfflineSetMutation(pending.sessionId, setId, { isDone: pending.isDone });
+        await enqueueSetMutation(setId, pending.sessionId, { isDone: pending.isDone });
         setSyncError('Guardado offline. Se sincronizará cuando vuelva internet.');
       } else {
         console.error('Failed to toggle set done:', err);

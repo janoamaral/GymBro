@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  flushOfflineSetMutationQueue,
+  flushOfflineMutationQueue,
   getOfflineQueuePendingCount,
   offlineSyncEventName,
 } from '@/lib/offline-queue';
@@ -19,9 +19,7 @@ export function OfflineSyncStatus() {
   const [isOnline, setIsOnline] = useState(() =>
     typeof window === 'undefined' ? true : navigator.onLine
   );
-  const [pendingCount, setPendingCount] = useState(() =>
-    typeof window === 'undefined' ? 0 : getOfflineQueuePendingCount()
-  );
+  const [pendingCount, setPendingCount] = useState(0);
   const [status, setStatus] = useState<SyncStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -32,7 +30,7 @@ export function OfflineSyncStatus() {
 
     const handleOnline = () => {
       setIsOnline(true);
-      void flushOfflineSetMutationQueue();
+      void flushOfflineMutationQueue();
     };
 
     const handleOffline = () => {
@@ -44,19 +42,24 @@ export function OfflineSyncStatus() {
         return;
       }
 
-      void flushOfflineSetMutationQueue();
+      void flushOfflineMutationQueue();
     };
 
     const handleSyncEvent = (event: Event) => {
       const custom = event as CustomEvent<SyncEventDetail>;
       setStatus(custom.detail?.status ?? 'idle');
-      setPendingCount(custom.detail?.pending ?? getOfflineQueuePendingCount());
+      setPendingCount(custom.detail?.pending ?? 0);
       setErrorMessage(custom.detail?.error ?? null);
+    };
+
+    const hydratePendingCount = async () => {
+      const pending = await getOfflineQueuePendingCount();
+      setPendingCount(pending);
     };
 
     const intervalId = window.setInterval(() => {
       if (navigator.onLine) {
-        void flushOfflineSetMutationQueue();
+        void flushOfflineMutationQueue();
       }
     }, 25_000);
 
@@ -66,7 +69,8 @@ export function OfflineSyncStatus() {
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
     window.addEventListener(offlineSyncEventName, handleSyncEvent as EventListener);
 
-    void flushOfflineSetMutationQueue();
+    void hydratePendingCount();
+    void flushOfflineMutationQueue();
 
     return () => {
       window.clearInterval(intervalId);

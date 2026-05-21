@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { CalendarDays } from 'lucide-react';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
+import { cacheResource, getCachedResource } from '@/lib/offline-queue';
 
 interface Set {
   id: string;
@@ -101,21 +102,52 @@ export function NextWorkout() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const hydrateCachedNextWorkout = async () => {
+      try {
+        const cached = await getCachedResource<Session | null>('next-workout');
+        if (cancelled || cached === null) {
+          return;
+        }
+
+        setSession(cached);
+        setLoading(false);
+      } catch {
+        // Ignora errores de cache local.
+      }
+    };
+
+    void hydrateCachedNextWorkout();
+
     const fetchNextWorkout = async () => {
       try {
         const localDate = formatLocalDate(new Date());
         const data = await fetchJsonWithInFlightDedup<{ session: Session | null }>(
           `/api/workouts/next?localDate=${localDate}`
         );
+        if (cancelled) {
+          return;
+        }
+
         setSession(data.session);
+        await cacheResource('next-workout', data.session);
       } catch (error) {
-        console.error('Failed to fetch next workout:', error);
+        if (!cancelled && navigator.onLine) {
+          console.error('Failed to fetch next workout:', error);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchNextWorkout();
+    void fetchNextWorkout();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (loading) {
