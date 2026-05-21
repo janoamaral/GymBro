@@ -61,7 +61,7 @@ export default function SettingsPage() {
         const profileData = profileRes;
 
         if (settingsData.settings) {
-          setCycleIncrement531(settingsData.settings.cycleIncrement531);
+          setCycleIncrement531(settingsData.settings.cycleIncrement531 ?? 5);
           setDisplayName(settingsData.settings.displayName ?? '');
           setAvatarUrl(settingsData.settings.avatarUrl ?? '');
           setDefaultUnit(settingsData.settings.defaultUnit === 'lb' ? 'lb' : 'kg');

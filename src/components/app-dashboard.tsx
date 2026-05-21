@@ -194,9 +194,10 @@ export default function AppDashboard({ userName, userPicture }: Props) {
 
   async function loadUserSettings() {
     const data = await fetchJsonWithInFlightDedup<{ settings?: { availablePlatesKg?: number[] } }>("/api/user/settings");
+    const platesFromSettings = data.settings?.availablePlatesKg;
 
-    const fetchedPlates = Array.isArray(data.settings?.availablePlatesKg)
-      ? data.settings.availablePlatesKg
+    const fetchedPlates = Array.isArray(platesFromSettings)
+      ? platesFromSettings
       : [...KG_PLATE_OPTIONS];
 
     setAvailablePlatesKg(KG_PLATE_OPTIONS.filter((plate) => fetchedPlates.includes(plate)));
