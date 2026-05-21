@@ -9,6 +9,7 @@ import { ProgressChart } from '@/components/progress-chart';
 import { NextWorkout } from '@/components/next-workout';
 import { NewCycleModal } from '@/components/new-cycle-modal';
 import { VolumeByLiftCard } from '@/components/volume-by-lift-card';
+import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 
 interface MainDashboardProps {
   readonly userName: string;
@@ -41,11 +42,12 @@ export default function MainDashboard({
         const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
         const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`;
 
-        const res = await fetch(`/api/workouts/calendar?from=${from}&to=${to}`);
-        const data = await res.json();
+        const data = await fetchJsonWithInFlightDedup<{ dates?: CalendarDateItem[] }>(
+          `/api/workouts/calendar?from=${from}&to=${to}`
+        );
 
         if (data.dates) {
-          setWorkoutDays(data.dates as CalendarDateItem[]);
+          setWorkoutDays(data.dates);
         }
       } catch (error) {
         console.error('Failed to fetch calendar data:', error);

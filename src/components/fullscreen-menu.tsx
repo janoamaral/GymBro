@@ -81,11 +81,9 @@ export function FullscreenMenu() {
                     <Link
                       href={item.href}
                       onClick={() => setIsOpen(false)}
-                      className={`block text-5xl font-heading leading-none sm:text-6xl ${
-                        isActive ? 'opacity-100' : 'opacity-80 hover:opacity-100'
-                      }`}
+                      className="block text-5xl font-heading leading-none text-[#101010] sm:text-6xl"
                     >
-                      {item.label}
+                      {isActive ? `▸ ${item.label}` : item.label}
                     </Link>
                   </li>
                 );
@@ -98,11 +96,9 @@ export function FullscreenMenu() {
               <Link
                 href="/settings"
                 onClick={() => setIsOpen(false)}
-                className={`block border-t border-[#101010]/25 pt-5 text-4xl font-heading leading-none sm:text-5xl ${
-                  currentPath === '/settings' ? 'opacity-100' : 'opacity-80 hover:opacity-100'
-                }`}
+                className="block border-t border-[#101010]/25 pt-5 text-4xl font-heading leading-none text-[#101010] sm:text-5xl"
               >
-                Perfil
+                {currentPath === '/settings' ? '▸ Perfil' : 'Perfil'}
               </Link>
             </div>
           </nav>

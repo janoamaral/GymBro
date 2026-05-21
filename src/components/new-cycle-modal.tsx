@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Modal } from '@/components/ui/modal';
+import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 
 interface Profile {
   liftId: string;
@@ -28,8 +29,7 @@ export function NewCycleModal({
 
   const fetchProfiles = async () => {
     try {
-      const res = await fetch('/api/training/531/profile');
-      const data = await res.json();
+      const data = await fetchJsonWithInFlightDedup<{ profiles?: Profile[] }>('/api/training/531/profile');
       setProfiles(data.profiles || []);
     } catch (err) {
       console.error('Failed to fetch profiles:', err);

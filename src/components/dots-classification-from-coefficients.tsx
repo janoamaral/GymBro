@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { DotsClassificationWidget } from "@/components/dots-classification-widget";
-import { calculateMeetCoefficients, type MeetSex } from "@/lib/training/meet-coefficients";
-import type { WeightUnit } from "@/lib/units/conversion";
+import { calculateMeetCoefficients } from "@/lib/training/meet-coefficients";
+import { fetchJsonWithInFlightDedup } from "@/lib/fetch-json-with-in-flight-dedup";
 
 // Obtiene el DOTS del endpoint de contexto de coeficientes
 export function DotsClassificationFromCoefficients() {
@@ -11,9 +11,7 @@ export function DotsClassificationFromCoefficients() {
   useEffect(() => {
     const fetchDots = async () => {
       try {
-        const response = await fetch("/api/meet/coefficients-context");
-        const data = await response.json();
-        if (!response.ok) return;
+        const data = await fetchJsonWithInFlightDedup<Record<string, unknown>>("/api/meet/coefficients-context");
         if (data && typeof data === "object") {
           if (typeof data.dots === "number") {
             setDots(data.dots);

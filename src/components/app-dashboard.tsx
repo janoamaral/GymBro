@@ -16,6 +16,7 @@ import {
   suggestPlatesPerSide,
 } from "@/lib/training/plate-calculator";
 import { formatDualWeight, type WeightUnit } from "@/lib/units/conversion";
+import { fetchJsonWithInFlightDedup } from "@/lib/fetch-json-with-in-flight-dedup";
 
 type LiftId = "SQ" | "DL" | "BP";
 type AssistanceVariant = "NONE" | "BBB" | "FSL";
@@ -168,25 +169,15 @@ export default function AppDashboard({ userName, userPicture }: Props) {
   const targetDual = formatDualWeight(targetWeight, unit);
 
   async function loadSessions() {
-    const response = await fetch("/api/workouts", { method: "GET" });
-    const data = await response.json();
+    const data = await fetchJsonWithInFlightDedup<{ sessions: WorkoutSession[] }>("/api/workouts");
 
-    if (!response.ok) {
-      throw new Error(data.error ?? "FAILED_TO_LOAD");
-    }
-
-    const loadedSessions = data.sessions as WorkoutSession[];
+    const loadedSessions = data.sessions;
     setSessions(loadedSessions);
     setSelectedSessionId((current) => current ?? loadedSessions[0]?.id ?? null);
   }
 
   async function load531Profiles() {
-    const response = await fetch("/api/training/531/profile", { method: "GET" });
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error ?? "FAILED_TO_LOAD_531_PROFILES");
-    }
+    const data = await fetchJsonWithInFlightDedup<{ profiles: Profile531[] }>("/api/training/531/profile");
 
     const nextProfiles: Record<LiftId, Profile531 | undefined> = {
       SQ: undefined,
@@ -194,7 +185,7 @@ export default function AppDashboard({ userName, userPicture }: Props) {
       BP: undefined,
     };
 
-    for (const profile of data.profiles as Profile531[]) {
+    for (const profile of data.profiles) {
       nextProfiles[profile.liftId] = profile;
     }
 
@@ -202,30 +193,22 @@ export default function AppDashboard({ userName, userPicture }: Props) {
   }
 
   async function loadUserSettings() {
-    const response = await fetch("/api/user/settings", { method: "GET" });
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error ?? "FAILED_TO_LOAD_SETTINGS");
-    }
+    const data = await fetchJsonWithInFlightDedup<{ settings?: { availablePlatesKg?: number[] } }>("/api/user/settings");
 
     const fetchedPlates = Array.isArray(data.settings?.availablePlatesKg)
-      ? (data.settings.availablePlatesKg as number[])
+      ? data.settings.availablePlatesKg
       : [...KG_PLATE_OPTIONS];
 
     setAvailablePlatesKg(KG_PLATE_OPTIONS.filter((plate) => fetchedPlates.includes(plate)));
   }
 
   async function load531Progress(nextLiftId: LiftId) {
-    const response = await fetch(`/api/training/531/progress?liftId=${nextLiftId}`, { method: "GET" });
-    const data = await response.json();
+    const data = await fetchJsonWithInFlightDedup<{ points: ProgressPoint531[]; currentTm: number | null }>(
+      `/api/training/531/progress?liftId=${nextLiftId}`
+    );
 
-    if (!response.ok) {
-      throw new Error(data.error ?? "FAILED_TO_LOAD_531_PROGRESS");
-    }
-
-    setProgress531Points(data.points as ProgressPoint531[]);
-    setProgress531Tm(data.currentTm as number | null);
+    setProgress531Points(data.points);
+    setProgress531Tm(data.currentTm);
   }
 
   useEffect(() => {

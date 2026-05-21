@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
+import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 
 type LiftId = 'SQ' | 'DL' | 'BP';
 
@@ -39,12 +41,24 @@ export default function SettingsPage() {
     const fetchSettings = async () => {
       try {
         const [settingsRes, profileRes] = await Promise.all([
-          fetch('/api/user/settings'),
-          fetch('/api/training/531/profile'),
+          fetchJsonWithInFlightDedup<{ settings?: {
+            cycleIncrement531?: number;
+            displayName?: string | null;
+            avatarUrl?: string | null;
+            defaultUnit?: 'kg' | 'lb';
+            competitionSex?: 'male' | 'female';
+            availablePlatesKg?: number[];
+          } }>('/api/user/settings'),
+          fetchJsonWithInFlightDedup<{ profiles?: Array<{
+            liftId: LiftId;
+            oneRm: number | string;
+            cycleNumber: number;
+            unit: 'kg' | 'lb';
+          }> }>('/api/training/531/profile'),
         ]);
 
-        const settingsData = await settingsRes.json();
-        const profileData = await profileRes.json();
+        const settingsData = settingsRes;
+        const profileData = profileRes;
 
         if (settingsData.settings) {
           setCycleIncrement531(settingsData.settings.cycleIncrement531);
@@ -54,7 +68,7 @@ export default function SettingsPage() {
           setCompetitionSex(settingsData.settings.competitionSex === 'female' ? 'female' : 'male');
 
           const fetchedPlates = Array.isArray(settingsData.settings.availablePlatesKg)
-            ? (settingsData.settings.availablePlatesKg as number[])
+            ? settingsData.settings.availablePlatesKg
             : [...KG_PLATE_OPTIONS];
 
           setAvailablePlatesKg(KG_PLATE_OPTIONS.filter((plate) => fetchedPlates.includes(plate)));
@@ -190,11 +204,7 @@ export default function SettingsPage() {
   };
 
   if (loading) {
-    return (
-      <main className="app-canvas min-h-screen px-4 py-8 sm:px-6 lg:px-8">
-        <p className="text-gray-400">Loading...</p>
-      </main>
-    );
+    return <FullscreenLoader label="Cargando configuración..." />;
   }
 
   return (

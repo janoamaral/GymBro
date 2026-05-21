@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { CalendarDays } from 'lucide-react';
+import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 
 interface Set {
   id: string;
@@ -103,8 +104,9 @@ export function NextWorkout() {
     const fetchNextWorkout = async () => {
       try {
         const localDate = formatLocalDate(new Date());
-        const res = await fetch(`/api/workouts/next?localDate=${localDate}`);
-        const data = await res.json();
+        const data = await fetchJsonWithInFlightDedup<{ session: Session | null }>(
+          `/api/workouts/next?localDate=${localDate}`
+        );
         setSession(data.session);
       } catch (error) {
         console.error('Failed to fetch next workout:', error);

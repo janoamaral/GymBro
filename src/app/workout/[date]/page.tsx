@@ -6,6 +6,7 @@ import { ArrowLeft, CalendarDays, GripVertical, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Modal } from '@/components/ui/modal';
 import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
+import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 
 const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
 const TOUCH_DRAG_THRESHOLD_PX = 12;
@@ -187,10 +188,10 @@ export default function WorkoutDayPage() {
     // Fetch en background y actualiza si hay cambios
     const fetchSessionsForDay = async () => {
       try {
-        const res = await fetch(`/api/workouts/by-date/${date}`);
-        if (!res.ok) throw new Error('Failed to fetch sessions');
-        const data = await res.json();
-        const fetchedSessions = data.sessions as SessionWithSets[];
+        const data = await fetchJsonWithInFlightDedup<{ sessions: SessionWithSets[] }>(
+          `/api/workouts/by-date/${date}`
+        );
+        const fetchedSessions = data.sessions;
         setSessions(fetchedSessions);
         setExercises(groupSetsByExercise(fetchedSessions));
         // Actualiza cache

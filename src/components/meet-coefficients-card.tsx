@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { calculateMeetCoefficients, type MeetSex } from '@/lib/training/meet-coefficients';
 import { DotsClassificationWidget } from '@/components/dots-classification-widget';
 import type { WeightUnit } from '@/lib/units/conversion';
+import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 
 const COEFFICIENTS = [
   { key: 'wilks', label: 'Wilks' },
@@ -39,12 +40,7 @@ export function MeetCoefficientsCard() {
   useEffect(() => {
     const fetchContext = async () => {
       try {
-        const response = await fetch('/api/meet/coefficients-context');
-        const data = await response.json();
-
-        if (!response.ok) {
-          return;
-        }
+        const data = await fetchJsonWithInFlightDedup<Partial<CoefficientsContext>>('/api/meet/coefficients-context');
 
         setContext({
           squat: Number(data.squat) || STATIC_DATA.squat,

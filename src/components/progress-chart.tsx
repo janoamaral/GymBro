@@ -10,6 +10,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 
 interface ProgressPoint {
   id: string;
@@ -43,15 +44,12 @@ export function ProgressChart() {
       setLoading(true);
 
       try {
-        const response = await fetch(`/api/training/531/progress?liftId=${liftId}`);
-        const payload = await response.json();
-
-        if (!response.ok) {
-          throw new Error(payload.error ?? 'FAILED_TO_FETCH_PROGRESS');
-        }
+        const payload = await fetchJsonWithInFlightDedup<{ points?: ProgressPoint[] }>(
+          `/api/training/531/progress?liftId=${liftId}`
+        );
 
         const nextPoints = Array.isArray(payload.points)
-          ? (payload.points as ProgressPoint[])
+          ? payload.points
               .slice()
               .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
           : [];

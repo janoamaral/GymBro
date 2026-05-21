@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Calculator, Dumbbell } from 'lucide-react';
 import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
 import { Skeleton } from '@/components/ui/skeleton';
+import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 
 const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
 const KG_PLATE_OPTIONS = [25, 20, 15, 10, 5, 2.5, 1.25] as const;
@@ -40,29 +41,6 @@ type SetSyncState = {
 };
 
 const WORKOUT_CACHE_KEY = 'workout-by-date-cache';
-const inFlightGetRequests = new Map<string, Promise<unknown>>();
-
-const fetchJsonWithInFlightDedup = async <T,>(url: string): Promise<T> => {
-  const existingRequest = inFlightGetRequests.get(url) as Promise<T> | undefined;
-  if (existingRequest) {
-    return existingRequest;
-  }
-
-  const request = fetch(url)
-    .then(async (response) => {
-      if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
-      }
-
-      return (await response.json()) as T;
-    })
-    .finally(() => {
-      inFlightGetRequests.delete(url);
-    });
-
-  inFlightGetRequests.set(url, request);
-  return request;
-};
 
 const getCachedExerciseSets = (date: string, exerciseId: string): Set[] => {
   if (globalThis.window === undefined) {

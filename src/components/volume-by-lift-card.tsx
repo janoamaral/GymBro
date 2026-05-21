@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 
 type LiftId = 'SQ' | 'DL' | 'BP';
 
@@ -110,38 +111,41 @@ export function VolumeByLiftCard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const controller = new AbortController();
+    let isActive = true;
 
     const loadVolume = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const response = await fetch('/api/workouts', { signal: controller.signal });
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error ?? 'FAILED_TO_LOAD_VOLUME');
-        }
+        const data = await fetchJsonWithInFlightDedup<{ sessions: WorkoutSession[] }>('/api/workouts');
 
         const { start, end } = getLast7DaysWindow();
-        const sessions = (data.sessions as WorkoutSession[]).filter((session) => shouldIncludeSession(session, start, end));
+        const sessions = data.sessions.filter((session) => shouldIncludeSession(session, start, end));
+
+        if (!isActive) {
+          return;
+        }
 
         setSummaries(accumulateVolume(sessions));
       } catch (fetchError) {
-        if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+        if (!isActive) {
           return;
         }
 
         setError(fetchError instanceof Error ? fetchError.message : 'FAILED_TO_LOAD_VOLUME');
       } finally {
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+        }
       }
     };
 
     loadVolume();
 
-    return () => controller.abort();
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   const hasAnyPlanned = useMemo(

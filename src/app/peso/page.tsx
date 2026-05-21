@@ -12,6 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 
 type WeightUnit = 'kg' | 'lb';
 
@@ -247,14 +248,9 @@ export default function PesoPage() {
     setError(null);
 
     try {
-      const response = await fetch('/api/user/bodyweight');
-      const data = await response.json();
+      const data = await fetchJsonWithInFlightDedup<{ measurements?: BodyweightMeasurement[] }>('/api/user/bodyweight');
 
-      if (!response.ok) {
-        throw new Error(data.error ?? 'FAILED_TO_LOAD_BODYWEIGHT');
-      }
-
-      setMeasurements((data.measurements ?? []) as BodyweightMeasurement[]);
+      setMeasurements(data.measurements ?? []);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'FAILED_TO_LOAD_BODYWEIGHT');
     } finally {
