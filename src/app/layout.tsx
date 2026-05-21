@@ -3,6 +3,8 @@ import { Bebas_Neue, Rajdhani } from "next/font/google";
 import "./globals.css";
 import { SharedElementProvider } from "@/components/ui/shared-element-provider";
 import { GlobalHamburger } from "@/components/global-hamburger";
+import { PwaBoot } from "@/components/pwa-boot";
+import { OfflineSyncStatus } from "@/components/offline-sync-status";
 
 const heading = Bebas_Neue({
   variable: "--font-heading",
@@ -19,6 +21,13 @@ const body = Rajdhani({
 export const metadata: Metadata = {
   title: "GymBro",
   description: "Gym companion app with 5/3/1 and smart plate loading",
+  manifest: "/manifest.webmanifest",
+  themeColor: "#020202",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "GymBro",
+  },
 };
 
 export default function RootLayout({
@@ -32,9 +41,11 @@ export default function RootLayout({
       className={`${heading.variable} ${body.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <PwaBoot />
         <SharedElementProvider>
           <GlobalHamburger />
           {children}
+          <OfflineSyncStatus />
         </SharedElementProvider>
       </body>
     </html>
