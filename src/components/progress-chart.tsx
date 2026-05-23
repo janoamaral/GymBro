@@ -17,11 +17,17 @@ interface ProgressPoint {
   id: string;
   date: string;
   e1rm: number;
+  targetWeight?: number;
   unit: 'kg' | 'lb';
 }
 
 type LiftId = 'BP' | 'SQ' | 'DL';
 type RangeKey = 'week' | 'month' | 'max';
+type MaxWeightChartPoint = {
+  date: string;
+  maxWeight: number;
+  unit: 'kg' | 'lb';
+};
 
 const RANGE_DAYS: Record<Exclude<RangeKey, 'max'>, number> = {
   week: 7,
@@ -115,13 +121,44 @@ export function ProgressChart() {
     return points.filter((point) => new Date(point.date).getTime() >= cutoff);
   }, [points, range]);
 
-  const firstPoint = filteredPoints[0] ?? null;
-  const lastPoint = filteredPoints.at(-1) ?? null;
-  const unit = lastPoint?.unit ?? points.at(-1)?.unit ?? '';
+  const maxWeightChartPoints = useMemo(() => {
+    const byDay = new Map<string, MaxWeightChartPoint>();
+
+    for (const point of filteredPoints) {
+      if (typeof point.targetWeight !== 'number' || !Number.isFinite(point.targetWeight)) {
+        continue;
+      }
+
+      const dayKey = point.date.slice(0, 10);
+      const existing = byDay.get(dayKey);
+
+      if (!existing || point.targetWeight > existing.maxWeight) {
+        byDay.set(dayKey, {
+          date: point.date,
+          maxWeight: point.targetWeight,
+          unit: point.unit,
+        });
+      }
+    }
+
+    return Array.from(byDay.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [filteredPoints]);
+
+  const firstWeightPoint = maxWeightChartPoints[0] ?? null;
+  const lastWeightPoint = maxWeightChartPoints.at(-1) ?? null;
+  const maxPoint = filteredPoints.reduce<ProgressPoint | null>(
+    (currentMax, point) => (currentMax === null || point.e1rm > currentMax.e1rm ? point : currentMax),
+    null,
+  );
+  const maxWeightPoint = maxWeightChartPoints.reduce<MaxWeightChartPoint | null>(
+    (currentMax, point) => (currentMax === null || point.maxWeight > currentMax.maxWeight ? point : currentMax),
+    null,
+  );
+  const unit = maxWeightPoint?.unit ?? maxPoint?.unit ?? lastWeightPoint?.unit ?? points.at(-1)?.unit ?? '';
 
   const trend =
-    firstPoint && lastPoint && firstPoint.e1rm > 0
-      ? ((lastPoint.e1rm - firstPoint.e1rm) / firstPoint.e1rm) * 100
+    firstWeightPoint && lastWeightPoint && firstWeightPoint.maxWeight > 0
+      ? ((lastWeightPoint.maxWeight - firstWeightPoint.maxWeight) / firstWeightPoint.maxWeight) * 100
       : 0;
 
   const trendPrefix = trend >= 0 ? '+' : '';
@@ -148,7 +185,7 @@ export function ProgressChart() {
     return parsed.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
   };
 
-  const isEmpty = !loading && filteredPoints.length === 0;
+  const isEmpty = !loading && maxWeightChartPoints.length === 0;
 
   if (loading) {
     return (
@@ -169,7 +206,7 @@ export function ProgressChart() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="text-xl font-bold normal-case not-italic">Chart</h3>
-            <p className="mt-1 text-xs text-gray-400">Top keyword</p>
+            <p className="mt-1 text-xs text-gray-400">Categoría</p>
             <p className="text-lg font-semibold normal-case not-italic">{LIFT_LABELS[liftId]}</p>
           </div>
 
@@ -222,7 +259,7 @@ export function ProgressChart() {
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
-                data={filteredPoints}
+                data={maxWeightChartPoints}
                 margin={{ top: 10, right: 8, left: -14, bottom: 0 }}
                 accessibilityLayer={false}
                 tabIndex={-1}
@@ -260,7 +297,7 @@ export function ProgressChart() {
                       ? `${numericValue.toFixed(1)} ${unit}`
                       : String(value);
 
-                    return [formattedValue, 'e1RM'];
+                    return [formattedValue, 'Max Weight'];
                   }}
                   labelFormatter={(label) => {
                     if (typeof label !== 'string' && typeof label !== 'number') {
@@ -283,7 +320,7 @@ export function ProgressChart() {
                 />
                 <Area
                   type="monotone"
-                  dataKey="e1rm"
+                  dataKey="maxWeight"
                   stroke="url(#progressStroke)"
                   fill="url(#progressFill)"
                   strokeWidth={3}
@@ -297,12 +334,23 @@ export function ProgressChart() {
         </div>
 
         <div className="mt-4 flex items-end justify-between gap-4 border-t border-white/10 pt-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.22em] text-gray-400">{rangeLabel}</p>
-            <p className="text-4xl font-semibold leading-none normal-case not-italic">
-              {lastPoint ? lastPoint.e1rm.toFixed(1) : '--'}
-              <span className="ml-1 text-base text-gray-300">{unit}</span>
-            </p>
+          <div className="grid gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.22em] text-gray-400">{rangeLabel}</p>
+              <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-gray-500">Max Weight</p>
+              <p className="text-4xl font-semibold leading-none normal-case not-italic text-emerald-300">
+                {maxWeightPoint ? maxWeightPoint.maxWeight.toFixed(1) : '--'}
+                <span className="ml-1 text-base text-gray-300">{unit}</span>
+              </p>
+            </div>
+
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">e1RM</p>
+              <p className="text-2xl font-semibold leading-none normal-case not-italic">
+                {maxPoint ? maxPoint.e1rm.toFixed(1) : '--'}
+                <span className="ml-1 text-sm text-gray-300">{unit}</span>
+              </p>
+            </div>
           </div>
 
           <div className={`text-right text-3xl font-semibold normal-case not-italic ${trend >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
