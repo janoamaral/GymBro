@@ -989,6 +989,9 @@ export default function ExerciseDetailPage() {
           transform: scale(0.96);
           box-shadow: 0 10px 24px rgba(214, 255, 67, 0.18);
         }
+        .rest-timer-fab svg {
+          transform: translateY(-2px);
+        }
 
         @keyframes set-reps-zoom-in {
           0% {
