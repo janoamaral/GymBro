@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calculator, Dumbbell } from 'lucide-react';
+import { ArrowLeft, Calculator, Dumbbell, Timer } from 'lucide-react';
 import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
+import { RestTimerModal } from '@/components/rest-timer-modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 import {
@@ -64,6 +65,8 @@ export default function ExerciseDetailPage() {
   const [syncError, setSyncError] = useState('');
   const [savingSetIds, setSavingSetIds] = useState<Record<string, boolean>>({});
   const [showCalculator, setShowCalculator] = useState(false);
+  const [restTimerSeconds, setRestTimerSeconds] = useState(90);
+  const [showRestTimer, setShowRestTimer] = useState(false);
   const [calculatorWeight, setCalculatorWeight] = useState(0);
   const [calculatorUnit, setCalculatorUnit] = useState<'kg' | 'lb'>('kg');
   const [availablePlatesKg, setAvailablePlatesKg] = useState<number[]>([...KG_PLATE_OPTIONS]);
@@ -260,6 +263,22 @@ export default function ExerciseDetailPage() {
     };
 
     loadPlateSettings();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchJsonWithInFlightDedup<{ settings?: { restTimerSeconds?: number } }>('/api/user/settings')
+      .then((data) => {
+        if (!cancelled && data.settings?.restTimerSeconds) {
+          setRestTimerSeconds(data.settings.restTimerSeconds);
+        }
+      })
+      .catch(() => {
+        // Use default value on error
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -874,6 +893,23 @@ export default function ExerciseDetailPage() {
         )}
       </div>
 
+      {/* Floating rest timer button */}
+      <button
+        type="button"
+        onClick={() => setShowRestTimer(true)}
+        aria-label="Iniciar timer de descanso"
+        title="Timer de descanso"
+        className="rest-timer-fab"
+      >
+        <Timer size={26} />
+      </button>
+
+      <RestTimerModal
+        isOpen={showRestTimer}
+        initialSeconds={restTimerSeconds}
+        onClose={() => setShowRestTimer(false)}
+      />
+
       {/* Plate Calculator Modal */}
       <PlateCalculatorModal
         isOpen={showCalculator}
@@ -930,6 +966,28 @@ export default function ExerciseDetailPage() {
 
         .exercise-complete-pop {
           animation: exercise-complete-pop 760ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .rest-timer-fab {
+          position: fixed;
+          right: max(1rem, env(safe-area-inset-right));
+          bottom: max(1rem, env(safe-area-inset-bottom));
+          width: 3.75rem;
+          height: 3.75rem;
+          border-radius: 9999px;
+          border: none;
+          background: #d6ff43;
+          color: #0b0b0b;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 16px 36px rgba(214, 255, 67, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.08);
+          z-index: 60;
+          transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+        }
+        .rest-timer-fab:active {
+          transform: scale(0.96);
+          box-shadow: 0 10px 24px rgba(214, 255, 67, 0.18);
         }
 
         @keyframes set-reps-zoom-in {
