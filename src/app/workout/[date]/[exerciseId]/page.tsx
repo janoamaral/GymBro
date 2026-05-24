@@ -938,7 +938,7 @@ export default function ExerciseDetailPage() {
                 key={set.id}
                 className={
                   isNext
-                    ? 'relative rounded-2xl bg-accent text-[#101010] shadow-lg p-6 transition-all min-h-30'
+                    ? 'set-card-active-glow relative rounded-2xl bg-accent text-[#101010] shadow-lg p-6 transition-all min-h-30'
                     : 'relative panel-soft p-6 text-white min-h-30'
                 }
               >
@@ -1171,6 +1171,14 @@ export default function ExerciseDetailPage() {
           animation: exercise-complete-pop 760ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
+        .set-card-active-glow {
+          box-shadow:
+            0 0 0 1px rgba(214, 255, 67, 0.44),
+            0 14px 30px rgba(214, 255, 67, 0.26),
+            0 0 22px rgba(214, 255, 67, 0.42);
+          animation: active-card-glow 2.4s ease-in-out infinite;
+        }
+
         .set-status-pill {
           display: inline-flex;
           align-items: center;
@@ -1317,6 +1325,27 @@ export default function ExerciseDetailPage() {
           100% {
             transform: scale(1);
             filter: drop-shadow(0 0 0 rgba(214, 255, 67, 0));
+          }
+        }
+
+        @keyframes active-card-glow {
+          0% {
+            box-shadow:
+              0 0 0 1px rgba(214, 255, 67, 0.36),
+              0 12px 24px rgba(214, 255, 67, 0.2),
+              0 0 16px rgba(214, 255, 67, 0.28);
+          }
+          50% {
+            box-shadow:
+              0 0 0 1px rgba(214, 255, 67, 0.5),
+              0 18px 34px rgba(214, 255, 67, 0.3),
+              0 0 30px rgba(214, 255, 67, 0.5);
+          }
+          100% {
+            box-shadow:
+              0 0 0 1px rgba(214, 255, 67, 0.36),
+              0 12px 24px rgba(214, 255, 67, 0.2),
+              0 0 16px rgba(214, 255, 67, 0.28);
           }
         }
       `}</style>
