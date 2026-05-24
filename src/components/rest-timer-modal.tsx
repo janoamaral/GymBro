@@ -32,6 +32,60 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
   const [isFinished, setIsFinished] = useState(false);
   const [showGoZoom, setShowGoZoom] = useState(false);
   const intervalRef = useRef<number | null>(null);
+  const alarmPlayedRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const alarmTimeoutIdsRef = useRef<number[]>([]);
+
+  const playAlarm = () => {
+    if (alarmPlayedRef.current) {
+      return;
+    }
+
+    alarmPlayedRef.current = true;
+
+    const AudioContextCtor = globalThis.AudioContext ?? globalThis.webkitAudioContext;
+    if (!AudioContextCtor) {
+      console.warn('AudioContext no está disponible para reproducir la alarma del timer.');
+      return;
+    }
+
+    const context = audioContextRef.current ?? new AudioContextCtor();
+    audioContextRef.current = context;
+    void context.resume().catch(() => {
+      console.warn('No se pudo activar el audio del timer.');
+    });
+
+    const startAt = context.currentTime + 0.02;
+    const pattern = [
+      { frequency: 1040, duration: 0.14 },
+      { frequency: 1240, duration: 0.14 },
+      { frequency: 1040, duration: 0.14 },
+      { frequency: 1560, duration: 0.2 },
+    ];
+
+    let offset = startAt;
+    pattern.forEach(({ frequency, duration }, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = 'square';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.0001, offset);
+      gain.gain.exponentialRampToValueAtTime(0.34, offset + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, offset + duration);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(offset);
+      oscillator.stop(offset + duration + 0.02);
+
+      const timeoutId = globalThis.window.setTimeout(() => {
+        oscillator.disconnect();
+        gain.disconnect();
+      }, Math.max(0, (offset + duration + 0.05 - context.currentTime) * 1000));
+      alarmTimeoutIdsRef.current.push(timeoutId);
+
+      offset += duration + (index < pattern.length - 1 ? 0.08 : 0);
+    });
+  };
 
   useEffect(() => {
     if (isFinished) {
@@ -75,10 +129,32 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
     return () => globalThis.window.clearTimeout(timeout);
   }, [showGoZoom]);
 
+  useEffect(() => {
+    if (!isFinished) {
+      return;
+    }
+
+    playAlarm();
+  }, [isFinished]);
+
+  useEffect(() => {
+    return () => {
+      alarmTimeoutIdsRef.current.forEach((timeoutId) => {
+        globalThis.window.clearTimeout(timeoutId);
+      });
+      alarmTimeoutIdsRef.current = [];
+      void audioContextRef.current?.close().catch(() => {
+        console.warn('No se pudo cerrar el audio del timer.');
+      });
+      audioContextRef.current = null;
+    };
+  }, []);
+
   const handleAddThirty = () => {
     setRemaining((prev) => prev + 30);
     if (isFinished) {
       setIsFinished(false);
+      alarmPlayedRef.current = false;
     }
   };
 
