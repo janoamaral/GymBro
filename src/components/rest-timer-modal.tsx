@@ -43,7 +43,7 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
 
     alarmPlayedRef.current = true;
 
-    const AudioContextCtor = globalThis.AudioContext ?? globalThis.webkitAudioContext;
+    const AudioContextCtor = (globalThis as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext ?? (globalThis as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextCtor) {
       console.warn('AudioContext no está disponible para reproducir la alarma del timer.');
       return;
