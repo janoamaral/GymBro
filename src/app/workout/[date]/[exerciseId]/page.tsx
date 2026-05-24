@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calculator, Dumbbell, Timer } from 'lucide-react';
+import { ArrowLeft, Calculator, Dumbbell, Pencil, Timer } from 'lucide-react';
 import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
 import { RestTimerModal } from '@/components/rest-timer-modal';
+import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 import {
@@ -40,7 +41,7 @@ interface SessionWithSets {
   sets: Set[];
 }
 
-type SetServerSnapshot = Pick<Set, 'setFeelingScore' | 'rpe' | 'rir' | 'isDone'>;
+type SetServerSnapshot = Pick<Set, 'repsTarget' | 'targetWeight' | 'setFeelingScore' | 'rpe' | 'rir' | 'isDone'>;
 type SetSyncState = {
   metricsQueued: boolean;
   metricsInFlight: boolean;
@@ -79,6 +80,11 @@ export default function ExerciseDetailPage() {
   const [entrySetCountText, setEntrySetCountText] = useState<string | null>(null);
   const [recentlyCompletedSetIds, setRecentlyCompletedSetIds] = useState<Record<string, boolean>>({});
   const [isExerciseCompletionAnimating, setIsExerciseCompletionAnimating] = useState(false);
+  const [editingSetId, setEditingSetId] = useState<string | null>(null);
+  const [editRepsTarget, setEditRepsTarget] = useState('');
+  const [editTargetWeight, setEditTargetWeight] = useState('');
+  const [isEditSaving, setIsEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
   const metricsDebounceTimersRef = useRef<Record<string, number>>({});
   const completionAnimationTimersRef = useRef<Record<string, number>>({});
   const exerciseCompletionTimerRef = useRef<number | null>(null);
@@ -132,6 +138,8 @@ export default function ExerciseDetailPage() {
   const rememberConfirmedValues = (sourceSets: Set[]) => {
     sourceSets.forEach((set) => {
       confirmedSetValuesRef.current[set.id] = {
+        repsTarget: set.repsTarget,
+        targetWeight: set.targetWeight,
         setFeelingScore: set.setFeelingScore,
         rpe: set.rpe,
         rir: set.rir,
@@ -613,6 +621,132 @@ export default function ExerciseDetailPage() {
     setShowCalculator(true);
   };
 
+  const handleOpenSetEdit = (set: Set) => {
+    setEditError('');
+    setEditingSetId(set.id);
+    setEditRepsTarget(String(set.repsTarget));
+    setEditTargetWeight(String(set.targetWeight));
+  };
+
+  const handleCloseSetEdit = () => {
+    if (isEditSaving) {
+      return;
+    }
+
+    setEditingSetId(null);
+    setEditError('');
+  };
+
+  const handleSaveSetEdit = async () => {
+    const set = sets.find((item) => item.id === editingSetId);
+    if (!set) {
+      return;
+    }
+
+    const nextRepsTarget = Number.parseInt(editRepsTarget, 10);
+    const nextTargetWeight = Number.parseFloat(editTargetWeight);
+
+    if (!Number.isInteger(nextRepsTarget) || nextRepsTarget < 1 || nextRepsTarget > 100) {
+      setEditError('Las repeticiones deben estar entre 1 y 100.');
+      return;
+    }
+
+    if (!Number.isFinite(nextTargetWeight) || nextTargetWeight <= 0) {
+      setEditError('El peso debe ser mayor que 0.');
+      return;
+    }
+
+    const confirmedBeforeEdit = confirmedSetValuesRef.current[set.id] ?? {
+      repsTarget: set.repsTarget,
+      targetWeight: set.targetWeight,
+      setFeelingScore: set.setFeelingScore,
+      rpe: set.rpe,
+      rir: set.rir,
+      isDone: set.isDone,
+    };
+
+    setEditError('');
+    setIsEditSaving(true);
+    setSets((currentSets) =>
+      currentSets.map((currentSet) =>
+        currentSet.id === set.id
+          ? { ...currentSet, repsTarget: nextRepsTarget, targetWeight: nextTargetWeight }
+          : currentSet
+      )
+    );
+
+    try {
+      const response = await fetch(`/api/workouts/${set.sessionId}/sets/${set.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          repsTarget: nextRepsTarget,
+          targetWeight: nextTargetWeight,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 429 || response.status >= 500) {
+          await enqueueSetMutation(set.id, set.sessionId, {
+            repsTarget: nextRepsTarget,
+            targetWeight: nextTargetWeight,
+          });
+          confirmedSetValuesRef.current[set.id] = {
+            ...confirmedBeforeEdit,
+            repsTarget: nextRepsTarget,
+            targetWeight: nextTargetWeight,
+          };
+          setSyncError('Guardado offline. Se sincronizará cuando vuelva internet.');
+          setEditingSetId(null);
+          return;
+        }
+
+        const data = (await response.json().catch(() => null)) as { error?: string; detail?: string } | null;
+        throw new Error(data?.detail ?? data?.error ?? 'FAILED_TO_UPDATE_SET');
+      }
+
+      confirmedSetValuesRef.current[set.id] = {
+        ...confirmedBeforeEdit,
+        repsTarget: nextRepsTarget,
+        targetWeight: nextTargetWeight,
+      };
+      await acknowledgeSetMutationFields(set.id, ['repsTarget', 'targetWeight']);
+      setEditingSetId(null);
+    } catch (err) {
+      if (!navigator.onLine || err instanceof TypeError) {
+        await enqueueSetMutation(set.id, set.sessionId, {
+          repsTarget: nextRepsTarget,
+          targetWeight: nextTargetWeight,
+        });
+        confirmedSetValuesRef.current[set.id] = {
+          ...confirmedBeforeEdit,
+          repsTarget: nextRepsTarget,
+          targetWeight: nextTargetWeight,
+        };
+        setSyncError('Guardado offline. Se sincronizará cuando vuelva internet.');
+        setEditingSetId(null);
+      } else {
+        console.error('Failed to update set edit:', err);
+        setSets((currentSets) =>
+          currentSets.map((currentSet) =>
+            currentSet.id === set.id
+              ? {
+                  ...currentSet,
+                  repsTarget: confirmedBeforeEdit.repsTarget,
+                  targetWeight: confirmedBeforeEdit.targetWeight,
+                }
+              : currentSet
+          )
+        );
+        setEditError('No se pudo guardar la serie. Reintentá.');
+      }
+    } finally {
+      setIsEditSaving(false);
+    }
+  };
+
   const renderFeelingSection = (set: Set, isNext: boolean) => {
     if (!set.isDone) {
       return (
@@ -742,6 +876,7 @@ export default function ExerciseDetailPage() {
   // Encuentra el primer set no completado (próximo a realizar)
   const nextSetIndex = sets.findIndex((set) => !set.isDone);
   const allSetsCompleted = sets.length > 0 && sets.every((set) => set.isDone);
+  const editingSet = editingSetId ? sets.find((set) => set.id === editingSetId) ?? null : null;
 
   return (
     <main className="app-canvas min-h-screen px-4 py-8 sm:px-6 lg:px-8">
@@ -808,7 +943,7 @@ export default function ExerciseDetailPage() {
                 }
               >
                 {/* Info principal */}
-                <div className="flex items-center justify-between mb-2">
+                <div className="mb-2 flex items-start justify-between">
                   <div>
                     <span className="block text-xs font-heading uppercase tracking-widest opacity-70">
                       Serie {set.setNumber}
@@ -834,21 +969,16 @@ export default function ExerciseDetailPage() {
                     </span>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <input
-                      type="checkbox"
-                      checked={set.isDone}
-                      onChange={() => handleToggleDone(set.id)}
-                      title={`Marcar set ${set.setNumber} como completado`}
-                      aria-label={`Marcar set ${set.setNumber} como completado`}
-                      className={
-                        isNext
-                          ? 'w-7 h-7 rounded border-2 border-[#b6d900] checked:bg-[#101010] checked:border-[#101010] accent-[#101010] cursor-pointer'
-                          : 'w-6 h-6 rounded border-2 border-gray-600 checked:bg-[#d6ff43] checked:border-[#d6ff43] cursor-pointer'
-                      }
-                    />
-                    <span className={isNext ? 'text-xs text-[#101010] font-bold' : 'text-xs text-gray-400'}>
-                      {set.isDone ? 'Completado' : 'Pendiente'}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleDone(set.id)}
+                      title={`Marcar set ${set.setNumber} como ${set.isDone ? 'pendiente' : 'completado'}`}
+                      aria-label={`Marcar set ${set.setNumber} como ${set.isDone ? 'pendiente' : 'completado'}`}
+                      className={`set-status-pill ${isNext ? 'set-status-pill--next' : 'set-status-pill--base'} ${set.isDone ? 'set-status-pill--done' : 'set-status-pill--pending'}`}
+                    >
+                      <Dumbbell size={13} className="shrink-0" />
+                      <span>{set.isDone ? 'Completado' : 'Pendiente'}</span>
+                    </button>
                   </div>
                 </div>
 
@@ -863,17 +993,26 @@ export default function ExerciseDetailPage() {
                 )}
 
                 {/* Botón de calcular pesos */}
-                <button
-                  onClick={() => handleOpenCalculator(Number(set.targetWeight), set.unit as 'kg' | 'lb')}
-                  className={
-                    isNext
-                      ? 'btn-dark flex w-full items-center justify-center gap-2 px-4 py-2 bg-[#101010] text-accent border-none font-bold mt-2'
-                      : 'btn-dark flex w-full items-center justify-center gap-2 px-4 py-2 mt-2'
-                  }
-                >
-                  <Calculator size={18} />
-                  Calcular Pesos
-                </button>
+                <div className="mt-4 flex justify-start gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSetEdit(set)}
+                    className={`set-icon-btn ${isNext ? 'set-icon-btn--next' : 'set-icon-btn--base'}`}
+                    title={`Editar serie ${set.setNumber}`}
+                    aria-label={`Editar serie ${set.setNumber}`}
+                  >
+                    <Pencil size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenCalculator(Number(set.targetWeight), set.unit as 'kg' | 'lb')}
+                    className={`set-icon-btn ${isNext ? 'set-icon-btn--next' : 'set-icon-btn--base'}`}
+                    title={`Calcular pesos para serie ${set.setNumber}`}
+                    aria-label={`Calcular pesos para serie ${set.setNumber}`}
+                  >
+                    <Calculator size={18} />
+                  </button>
+                </div>
 
                 {isSavingSet && (
                   <span
@@ -909,6 +1048,70 @@ export default function ExerciseDetailPage() {
         initialSeconds={restTimerSeconds}
         onClose={() => setShowRestTimer(false)}
       />
+
+      <Modal isOpen={editingSet !== null} onClose={handleCloseSetEdit} title={editingSet ? `Editar serie ${editingSet.setNumber}` : 'Editar serie'}>
+        {editingSet && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-300">
+              Ajustá las repeticiones o el peso objetivo de esta serie.
+            </p>
+
+            <label className="block space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                Repeticiones
+              </span>
+              <input
+                type="number"
+                min="1"
+                max="100"
+                step="1"
+                value={editRepsTarget}
+                onChange={(event) => setEditRepsTarget(event.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#d6ff43]/60"
+              />
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                Peso objetivo ({editingSet.unit})
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={editTargetWeight}
+                onChange={(event) => setEditTargetWeight(event.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#d6ff43]/60"
+              />
+            </label>
+
+            {editError && (
+              <p className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
+                {editError}
+              </p>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={handleCloseSetEdit}
+                disabled={isEditSaving}
+                className="btn-dark px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveSetEdit()}
+                disabled={isEditSaving}
+                className="btn-accent px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isEditSaving ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Plate Calculator Modal */}
       <PlateCalculatorModal
@@ -966,6 +1169,84 @@ export default function ExerciseDetailPage() {
 
         .exercise-complete-pop {
           animation: exercise-complete-pop 760ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .set-status-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.3rem;
+          border-radius: 999px;
+          border: 1px solid;
+          padding: 0.32rem 0.65rem;
+          font-size: 0.75rem;
+          line-height: 1;
+          font-weight: 700;
+          transition: background-color 150ms ease, border-color 150ms ease, transform 120ms ease;
+        }
+
+        .set-status-pill:active {
+          transform: scale(0.98);
+        }
+
+        .set-status-pill--next.set-status-pill--pending {
+          border-color: rgba(16, 16, 16, 0.35);
+          background: rgba(255, 255, 255, 0.55);
+          color: #101010;
+        }
+
+        .set-status-pill--next.set-status-pill--done {
+          border-color: rgba(16, 16, 16, 0.25);
+          background: rgba(16, 16, 16, 0.1);
+          color: #101010;
+        }
+
+        .set-status-pill--base.set-status-pill--pending {
+          border-color: rgba(255, 255, 255, 0.2);
+          background: #141922;
+          color: #dfe5ee;
+        }
+
+        .set-status-pill--base.set-status-pill--done {
+          border-color: rgba(214, 255, 67, 0.35);
+          background: rgba(214, 255, 67, 0.12);
+          color: #e8f8b0;
+        }
+
+        .set-icon-btn {
+          display: inline-flex;
+          height: 2.4rem;
+          width: 2.4rem;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          border: 1px solid;
+          transition: background-color 150ms ease, border-color 150ms ease, transform 120ms ease;
+        }
+
+        .set-icon-btn:active {
+          transform: scale(0.97);
+        }
+
+        .set-icon-btn--next {
+          border-color: rgba(16, 16, 16, 0.2);
+          background: rgba(255, 255, 255, 0.64);
+          color: #101010;
+        }
+
+        .set-icon-btn--next:hover {
+          background: rgba(255, 255, 255, 0.82);
+        }
+
+        .set-icon-btn--base {
+          border-color: rgba(255, 255, 255, 0.15);
+          background: rgba(255, 255, 255, 0.08);
+          color: #edf2f8;
+        }
+
+        .set-icon-btn--base:hover {
+          border-color: rgba(255, 255, 255, 0.25);
+          background: rgba(255, 255, 255, 0.14);
+          color: #ffffff;
         }
 
         .rest-timer-fab {

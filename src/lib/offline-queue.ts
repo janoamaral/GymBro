@@ -13,6 +13,8 @@ type SetUpdatePayload = {
   rpe?: number | null;
   rir?: number | null;
   isDone?: boolean;
+  repsTarget?: number;
+  targetWeight?: number;
 };
 
 type QueueMutationPayload =
