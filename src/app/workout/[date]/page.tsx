@@ -590,7 +590,7 @@ export default function WorkoutDayPage() {
     return null;
   };
 
-  const handleCardTouchStart = (event: TouchEvent<HTMLButtonElement>, exerciseId: string) => {
+  const handleCardTouchStart = (event: TouchEvent<HTMLElement>, exerciseId: string) => {
     const touch = event.touches[0];
     if (!touch) {
       return;
@@ -602,7 +602,7 @@ export default function WorkoutDayPage() {
     touchDraggingRef.current = false;
   };
 
-  const handleCardTouchMove = (event: TouchEvent<HTMLButtonElement>) => {
+  const handleCardTouchMove = (event: TouchEvent<HTMLElement>) => {
     const activeExerciseId = touchActiveExerciseIdRef.current;
     const touch = event.touches[0];
     const start = touchStartPointRef.current;
@@ -745,20 +745,6 @@ export default function WorkoutDayPage() {
               <button
                 key={exerciseGroup.exerciseId}
                 data-exercise-card-id={exerciseGroup.exerciseId}
-                draggable
-                onDragStart={(event) => {
-                  setDraggingExerciseId(exerciseGroup.exerciseId);
-                  setDragOverExerciseId(exerciseGroup.exerciseId);
-                  dragOriginPointRef.current = { x: event.clientX, y: event.clientY };
-                  setDragOffset({ x: 0, y: 0 });
-                }}
-                onDrag={(event) => {
-                  if (event.clientX === 0 && event.clientY === 0) {
-                    return;
-                  }
-
-                  updateDragOffset(event.clientX, event.clientY);
-                }}
                 onDragOver={(event) => {
                   event.preventDefault();
                   if (dragOverExerciseId !== exerciseGroup.exerciseId) {
@@ -769,15 +755,8 @@ export default function WorkoutDayPage() {
                   event.preventDefault();
                   handleDropExercise(exerciseGroup.exerciseId);
                 }}
-                onDragEnd={() => {
-                  resetDragState();
-                }}
-                onTouchStart={(event) => handleCardTouchStart(event, exerciseGroup.exerciseId)}
-                onTouchMove={handleCardTouchMove}
-                onTouchEnd={handleCardTouchEnd}
-                onTouchCancel={resetDragState}
                 onClick={(event) => handleExerciseOpen(event, exerciseGroup)}
-                className={`${baseCardClass} ${selectedCardClass} cursor-grab active:cursor-grabbing ${isDragTargetCard ? 'ring-2 ring-sky-300/70 drag-card--target' : ''} ${isDraggingThisCard ? 'opacity-85 drag-card--active transition-none' : ''}`}
+                className={`${baseCardClass} ${selectedCardClass} cursor-pointer pr-12 pb-12 ${isDragTargetCard ? 'ring-2 ring-sky-300/70 drag-card--target' : ''} ${isDraggingThisCard ? 'opacity-85 drag-card--active transition-none' : ''}`}
                 style={
                   isDraggingThisCard
                     ? { transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)` }
@@ -794,10 +773,36 @@ export default function WorkoutDayPage() {
                     {exerciseGroup.sets.length} set{exerciseGroup.sets.length > 1 ? 's' : ''}
                   </span>
                 </div>
-                <GripVertical
-                  size={16}
-                  className={`pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 ${isNext ? 'text-[#101010]/70' : 'text-gray-500'}`}
-                />
+                <span
+                  draggable
+                  onDragStart={(event) => {
+                    event.stopPropagation();
+                    setDraggingExerciseId(exerciseGroup.exerciseId);
+                    setDragOverExerciseId(exerciseGroup.exerciseId);
+                    dragOriginPointRef.current = { x: event.clientX, y: event.clientY };
+                    setDragOffset({ x: 0, y: 0 });
+                  }}
+                  onDrag={(event) => {
+                    if (event.clientX === 0 && event.clientY === 0) {
+                      return;
+                    }
+
+                    updateDragOffset(event.clientX, event.clientY);
+                  }}
+                  onDragEnd={() => {
+                    resetDragState();
+                  }}
+                  onTouchStart={(event) => handleCardTouchStart(event, exerciseGroup.exerciseId)}
+                  onTouchMove={handleCardTouchMove}
+                  onTouchEnd={handleCardTouchEnd}
+                  onTouchCancel={resetDragState}
+                  onClick={(event) => event.stopPropagation()}
+                  aria-label={`Reordenar ${exerciseGroup.exerciseName}`}
+                  title={`Reordenar ${exerciseGroup.exerciseName}`}
+                  className={`absolute right-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-gray-500 shadow-sm backdrop-blur-sm transition-colors active:cursor-grabbing hover:text-sky-300 ${isNext ? 'text-[#101010]/70' : 'text-gray-500'}`}
+                >
+                  <GripVertical size={18} className="pointer-events-none" />
+                </span>
                 <span
                   data-exercise-title
                   className={`set-card-title ${isNext || isComplete ? 'text-3xl font-black font-heading' : 'text-2xl font-bold font-heading'} ${isComplete ? 'set-card-title--done' : ''} transition-all duration-200 ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-8 scale-110 opacity-70' : ''}`}
