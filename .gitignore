@@ -3,6 +3,7 @@
 # dependencies
 /node_modules
 /.pnp
+/.codegraph
 .pnp.*
 .yarn/*
 !.yarn/patches
