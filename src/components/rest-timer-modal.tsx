@@ -31,10 +31,13 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
   const [remaining, setRemaining] = useState(initialSeconds);
   const [isFinished, setIsFinished] = useState(false);
   const [showGoZoom, setShowGoZoom] = useState(false);
+  const [addThirtyPops, setAddThirtyPops] = useState<number[]>([]);
   const intervalRef = useRef<number | null>(null);
   const alarmPlayedRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const alarmTimeoutIdsRef = useRef<number[]>([]);
+  const addThirtyPopTimeoutsRef = useRef<number[]>([]);
+  const addThirtyPopIdRef = useRef(0);
 
   const playAlarm = () => {
     if (alarmPlayedRef.current) {
@@ -143,6 +146,10 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
         globalThis.window.clearTimeout(timeoutId);
       });
       alarmTimeoutIdsRef.current = [];
+      addThirtyPopTimeoutsRef.current.forEach((timeoutId) => {
+        globalThis.window.clearTimeout(timeoutId);
+      });
+      addThirtyPopTimeoutsRef.current = [];
       void audioContextRef.current?.close().catch(() => {
         console.warn('No se pudo cerrar el audio del timer.');
       });
@@ -156,6 +163,15 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
       setIsFinished(false);
       alarmPlayedRef.current = false;
     }
+    const id = ++addThirtyPopIdRef.current;
+    setAddThirtyPops((prev) => [...prev, id]);
+    const timeoutId = globalThis.window.setTimeout(() => {
+      setAddThirtyPops((prev) => prev.filter((popId) => popId !== id));
+      addThirtyPopTimeoutsRef.current = addThirtyPopTimeoutsRef.current.filter(
+        (tid) => tid !== timeoutId,
+      );
+    }, 1500);
+    addThirtyPopTimeoutsRef.current.push(timeoutId);
   };
 
   return (
@@ -177,9 +193,16 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
       </div>
 
       <div className="rest-timer-actions">
-        <button type="button" onClick={handleAddThirty} className="rest-timer-btn-add">
-          +30 sec
-        </button>
+        <div className="rest-timer-btn-add-wrap">
+          {addThirtyPops.map((popId) => (
+            <span key={popId} className="rest-timer-add-pop" aria-hidden="true">
+              +30
+            </span>
+          ))}
+          <button type="button" onClick={handleAddThirty} className="rest-timer-btn-add">
+            +30 sec
+          </button>
+        </div>
         <button type="button" onClick={onClose} className="rest-timer-btn-finish">
           Finish
         </button>
@@ -256,8 +279,34 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
           width: 100%;
           max-width: 420px;
         }
+        .rest-timer-btn-add-wrap {
+          flex: 1;
+          position: relative;
+        }
+        .rest-timer-add-pop {
+          position: absolute;
+          bottom: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+          margin-bottom: 0.5rem;
+          font-family: var(--font-heading), sans-serif;
+          font-weight: 900;
+          font-style: italic;
+          font-size: 1.6rem;
+          letter-spacing: 0.04em;
+          color: #0c1100;
+          pointer-events: none;
+          animation: rest-timer-add-pop 1500ms cubic-bezier(0.45, 0, 0.55, 1) forwards;
+        }
+        @keyframes rest-timer-add-pop {
+          0% { transform: translate(-50%, 0); opacity: 0; }
+          15% { opacity: 1; }
+          70% { opacity: 1; }
+          100% { transform: translate(-50%, -124px); opacity: 0; }
+        }
         .rest-timer-btn-add {
           flex: 1;
+          width: 100%;
           padding: 0.875rem 1rem;
           border-radius: 0.875rem;
           background: #000;
