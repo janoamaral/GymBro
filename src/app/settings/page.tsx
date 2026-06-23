@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
@@ -37,6 +37,11 @@ export default function SettingsPage() {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error'>('success');
   const [pendingMutations, setPendingMutations] = useState<QueueMutation[]>([]);
+  const [exportMonth, setExportMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [exporting, setExporting] = useState(false);
 
   const showMessage = (text: string, type: 'success' | 'error' = 'success') => {
     setMessageType(type);
@@ -241,6 +246,36 @@ export default function SettingsPage() {
 
       return KG_PLATE_OPTIONS.filter((value) => current.includes(value) || value === plate);
     });
+  };
+
+  const handleExportCsv = async () => {
+    if (!/^\d{4}-\d{2}$/.test(exportMonth)) {
+      showMessage('Seleccioná un mes válido', 'error');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/workouts/export?month=${exportMonth}`);
+      if (!res.ok) {
+        throw new Error('No se pudo exportar el CSV');
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gymbro-${exportMonth}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showMessage('CSV exportado exitosamente', 'success');
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : 'Error al exportar', 'error');
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (loading) {
@@ -515,6 +550,34 @@ export default function SettingsPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          <div className="border-t border-gray-700 pt-6">
+            <h2 className="text-lg font-semibold text-white">Exportar ejercicios</h2>
+            <p className="mt-1 text-xs text-gray-400">
+              Descargá los ejercicios del mes seleccionado en formato CSV (fecha, ejercicio, reps, pesos, etc).
+            </p>
+
+            <div className="mt-4 flex flex-wrap items-end gap-3">
+              <label className="block">
+                <span className="mb-1 block text-xs text-gray-400">Mes</span>
+                <input
+                  type="month"
+                  value={exportMonth}
+                  onChange={(e) => setExportMonth(e.target.value)}
+                  className="field-dark"
+                />
+              </label>
+
+              <button
+                onClick={handleExportCsv}
+                disabled={exporting}
+                className="btn-accent flex items-center gap-2 px-4 py-2 font-medium disabled:opacity-50"
+              >
+                <Download size={16} />
+                {exporting ? 'Exportando...' : 'Exportar CSV'}
+              </button>
+            </div>
           </div>
 
           <div className="flex gap-3 justify-end pt-4">
