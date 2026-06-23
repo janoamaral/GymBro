@@ -7,6 +7,7 @@ import { Calendar } from '@/components/calendar';
 import { MeetCoefficientsCard } from '@/components/meet-coefficients-card';
 import { ProgressChart } from '@/components/progress-chart';
 import { NextWorkout } from '@/components/next-workout';
+import { NewCycleModal } from '@/components/new-cycle-modal';
 import { VolumeByLiftCard } from '@/components/volume-by-lift-card';
 import { Modal } from '@/components/ui/modal';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
@@ -30,6 +31,7 @@ export default function MainDashboard({
   const [currentDate, setCurrentDate] = useState(new Date());
   const [workoutDays, setWorkoutDays] = useState<CalendarDateItem[]>([]);
   const [showPlanChooser, setShowPlanChooser] = useState(false);
+  const [showNewCycleModal, setShowNewCycleModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const year = currentDate.getFullYear();
@@ -99,6 +101,11 @@ export default function MainDashboard({
 
   const handleDayClick = (date: string) => {
     router.push(`/workout/${date}`);
+  };
+
+  const handleNewCycleStart = () => {
+    setCurrentDate(new Date());
+    setShowNewCycleModal(false);
   };
 
   const userInitial = userName.trim().charAt(0).toUpperCase();
@@ -216,8 +223,24 @@ export default function MainDashboard({
             <p className="font-semibold text-white">Nuevo Plan Mensual</p>
             <p className="text-sm text-gray-400">Plan 5/3/1 día por día, 4 semanas (ciclo completo)</p>
           </button>
+          <button
+            onClick={() => {
+              setShowPlanChooser(false);
+              setShowNewCycleModal(true);
+            }}
+            className="btn-dark w-full px-4 py-4 text-left rounded-xl"
+          >
+            <p className="font-semibold text-white">Iniciar Nuevo Ciclo</p>
+            <p className="text-sm text-gray-400">Clona la última semana y genera un ciclo 5/3/1 de 4 semanas</p>
+          </button>
         </div>
       </Modal>
+
+      <NewCycleModal
+        isOpen={showNewCycleModal}
+        onClose={() => setShowNewCycleModal(false)}
+        onStart={handleNewCycleStart}
+      />
     </main>
   );
 }

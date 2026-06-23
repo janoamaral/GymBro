@@ -1,0 +1,141 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Modal } from '@/components/ui/modal';
+import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
+
+interface Profile {
+  liftId: string;
+  cycleNumber: number;
+  oneRm: number;
+  unit: string;
+}
+
+interface NewCycleModalProps {
+  readonly isOpen: boolean;
+  readonly onClose: () => void;
+  readonly onStart: (startDate: string) => void;
+}
+
+export function NewCycleModal({
+  isOpen,
+  onClose,
+  onStart,
+}: NewCycleModalProps) {
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [startDate, setStartDate] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchProfiles = async () => {
+    try {
+      const data = await fetchJsonWithInFlightDedup<{ profiles?: Profile[] }>('/api/training/531/profile');
+      setProfiles(data.profiles || []);
+    } catch (err) {
+      console.error('Failed to fetch profiles:', err);
+      setError('Failed to load profiles');
+    }
+  };
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dayOfWeek = tomorrow.getDay();
+  const daysToMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+  const nextMonday = new Date(tomorrow);
+  nextMonday.setDate(nextMonday.getDate() + daysToMonday);
+  const defaultStartDate = nextMonday.toISOString().split('T')[0];
+  const effectiveStartDate = startDate || defaultStartDate;
+
+  useEffect(() => {
+    if (isOpen) {
+      const timer = globalThis.setTimeout(() => {
+        void fetchProfiles();
+      }, 0);
+
+      return () => {
+        globalThis.clearTimeout(timer);
+      };
+    }
+  }, [isOpen]);
+
+  const handleStart = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/plan/new-cycle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startDate: effectiveStartDate }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to start new cycle');
+      }
+
+      onStart(effectiveStartDate);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Iniciar Nuevo Ciclo">
+      <div className="space-y-4">
+        {profiles.length > 0 ? (
+          <div className="panel-soft rounded-xl p-3 space-y-2">
+            <p className="text-sm font-medium text-gray-300">Current Cycle Info:</p>
+            {profiles.map((profile) => (
+              <div key={profile.liftId} className="text-sm text-gray-300">
+                <span className="font-semibold">{profile.liftId}</span>: Cycle {profile.cycleNumber}, 1RM {profile.oneRm} {profile.unit}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-400 text-sm">No 5/3/1 profiles found. Please create a profile first.</p>
+        )}
+
+        <div>
+          <label htmlFor="new-cycle-start-date" className="block text-sm font-medium text-gray-300 mb-2">
+            Start Date for New Cycle
+          </label>
+          <input
+            id="new-cycle-start-date"
+            type="date"
+            value={effectiveStartDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            title="Seleccionar fecha de inicio"
+            className="field-dark"
+          />
+        </div>
+
+        {error && (
+          <div className="bg-red-500/20 border border-red-500 rounded p-2 text-red-200 text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3 justify-end pt-4">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="btn-dark px-4 py-2 disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleStart}
+            disabled={loading || profiles.length === 0}
+            className="btn-accent px-4 py-2 font-medium disabled:opacity-50"
+          >
+            {loading ? 'Iniciando...' : 'Iniciar Nuevo Ciclo'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
