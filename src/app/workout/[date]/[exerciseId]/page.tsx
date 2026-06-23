@@ -8,6 +8,7 @@ import { RestTimerModal } from '@/components/rest-timer-modal';
 import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
+import { convertWeight, roundTo, type WeightUnit } from '@/lib/units/conversion';
 import {
   acknowledgeSetMutationFields,
   cacheWorkoutDay,
@@ -83,6 +84,7 @@ export default function ExerciseDetailPage() {
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
   const [editRepsTarget, setEditRepsTarget] = useState('');
   const [editTargetWeight, setEditTargetWeight] = useState('');
+  const [editUnit, setEditUnit] = useState<WeightUnit>('kg');
   const [isEditSaving, setIsEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const metricsDebounceTimersRef = useRef<Record<string, number>>({});
@@ -626,6 +628,7 @@ export default function ExerciseDetailPage() {
     setEditingSetId(set.id);
     setEditRepsTarget(String(set.repsTarget));
     setEditTargetWeight(String(set.targetWeight));
+    setEditUnit((set.unit === 'lb' ? 'lb' : 'kg') as WeightUnit);
   };
 
   const handleCloseSetEdit = () => {
@@ -1071,19 +1074,35 @@ export default function ExerciseDetailPage() {
               />
             </label>
 
-            <label className="block space-y-2">
+            <div className="block space-y-2">
               <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
-                Peso objetivo ({editingSet.unit})
+                Peso objetivo
               </span>
-              <input
-                type="number"
-                min="0"
-                step="0.5"
-                value={editTargetWeight}
-                onChange={(event) => setEditTargetWeight(event.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#d6ff43]/60"
-              />
-            </label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={editTargetWeight}
+                  onChange={(event) => setEditTargetWeight(event.target.value)}
+                  className="flex-1 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#d6ff43]/60"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextUnit: WeightUnit = editUnit === 'kg' ? 'lb' : 'kg';
+                    const current = Number.parseFloat(editTargetWeight);
+                    if (Number.isFinite(current) && current > 0) {
+                      setEditTargetWeight(String(roundTo(convertWeight(current, editUnit, nextUnit), 1)));
+                    }
+                    setEditUnit(nextUnit);
+                  }}
+                  className="rounded-lg border px-3 py-1 text-center text-xs font-semibold uppercase tracking-[0.12em] transition-colors border-emerald-300/60 bg-emerald-400/20 text-emerald-200 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+                >
+                  {editUnit}
+                </button>
+              </div>
+            </div>
 
             {editError && (
               <p className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
