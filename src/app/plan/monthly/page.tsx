@@ -2,12 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Dumbbell } from 'lucide-react';
 import { MonthlyDayModal, type MonthlyDay, type Profile } from '@/components/plan-wizard/monthly-day-modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
+import { tmForCycle, generate531Session, type LiftId } from '@/lib/training/531';
 
 const WEEKDAY_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const LIFT_LABELS: Record<string, string> = { SQ: 'Squat', BP: 'Bench Press', DL: 'Dead Lift' };
+
+const LIFT_LABEL_COLORS: Record<LiftId, { border: string; bg: string; text: string; icon: string }> = {
+  BP: { border: 'border-emerald-400/45', bg: 'bg-emerald-400/10', text: 'text-emerald-200', icon: 'text-emerald-400' },
+  DL: { border: 'border-violet-400/45', bg: 'bg-violet-400/10', text: 'text-violet-200', icon: 'text-violet-400' },
+  SQ: { border: 'border-orange-400/45', bg: 'bg-orange-400/10', text: 'text-orange-200', icon: 'text-orange-400' },
+};
 
 export default function MonthlyPlanPage() {
   const router = useRouter();
@@ -18,6 +26,7 @@ export default function MonthlyPlanPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [cycleIncrement531, setCycleIncrement531] = useState(5);
 
   // Step 2 state
   const [startWeek, setStartWeek] = useState(1);
@@ -32,10 +41,16 @@ export default function MonthlyPlanPage() {
   useEffect(() => {
     const fetchProfiles = async () => {
       try {
-        const data = await fetchJsonWithInFlightDedup<{ profiles?: Profile[] }>(
-          '/api/training/531/profile',
-        );
-        setProfiles(data.profiles ?? []);
+        const [profileData, settingsData] = await Promise.all([
+          fetchJsonWithInFlightDedup<{ profiles?: Profile[] }>(
+            '/api/training/531/profile',
+          ),
+          fetchJsonWithInFlightDedup<{ settings?: { cycleIncrement531?: number } }>(
+            '/api/user/settings',
+          ),
+        ]);
+        setProfiles(profileData.profiles ?? []);
+        setCycleIncrement531(settingsData.settings?.cycleIncrement531 ?? 5);
       } catch (err) {
         console.error('Failed to fetch profiles:', err);
       }
@@ -51,6 +66,41 @@ export default function MonthlyPlanPage() {
   }, []);
 
   const usedWeekdays = days.map((d) => d.weekday);
+
+  // ponytail: compute max weight per main lift for the cycle summary.
+  // Max is always week 3 (95% TM). If startWeek=4, week 3 wraps to next cycle with bumped 1RM.
+  const maxWeightsByLift = (() => {
+    const result: Array<{ liftId: LiftId; weight: number; unit: 'kg' | 'lb' }> = [];
+    const seen = new Set<string>();
+
+    for (const day of days) {
+      if (!day.mainLift || seen.has(day.mainLift)) continue;
+      seen.add(day.mainLift);
+
+      const liftId = day.mainLift;
+      const profile = profiles.find((p) => p.liftId === liftId);
+      const oneRm = profile ? profile.oneRm : day.mainOneRm;
+      const cycleNumber = profile ? profile.cycleNumber : 1;
+      const unit = (profile?.unit ?? day.mainUnit ?? 'kg') as 'kg' | 'lb';
+
+      if (!oneRm) continue;
+
+      const wrapped = startWeek === 4; // week 3 < startWeek=4
+      const incrementInUnit = unit === 'kg' ? cycleIncrement531 : cycleIncrement531 / 2.2046;
+      const effectiveOneRm = wrapped ? Number((oneRm + incrementInUnit).toFixed(2)) : oneRm;
+      const effectiveCycle = wrapped ? cycleNumber + 1 : cycleNumber;
+
+      const tm = tmForCycle(effectiveOneRm, liftId, unit, effectiveCycle);
+      const week3Sets = generate531Session({ tm, weekNumber: 3, unit });
+      const maxWeight = week3Sets[2]?.weight; // 3rd set = 95%
+
+      if (maxWeight !== undefined) {
+        result.push({ liftId, weight: maxWeight, unit });
+      }
+    }
+
+    return result;
+  })();
 
   const handleSaveDay = (day: MonthlyDay) => {
     if (editingDayIndex === null) {
@@ -275,12 +325,33 @@ export default function MonthlyPlanPage() {
             </div>
 
             {/* Summary */}
-            <div className="panel-soft rounded-xl p-3 space-y-1">
+            <div className="panel-soft rounded-xl p-3 space-y-3">
               <p className="text-sm font-medium text-gray-300">Resumen:</p>
               <p className="text-sm text-gray-400">
                 {days.length} {days.length === 1 ? 'día' : 'días'} × 4 semanas ={' '}
                 {days.length * 4} sesiones
               </p>
+              {maxWeightsByLift.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-xs text-gray-400">Peso máximo del ciclo (Semana 3 — 95% TM):</p>
+                  <div className="flex flex-col gap-2">
+                    {maxWeightsByLift.map(({ liftId, weight, unit }) => {
+                      const colors = LIFT_LABEL_COLORS[liftId];
+                      return (
+                        <div
+                          key={liftId}
+                          className={`inline-flex items-center gap-2 rounded-lg border ${colors.border} ${colors.bg} px-2.5 py-1.5 ${colors.text}`}
+                        >
+                          <Dumbbell size={14} className={colors.icon} />
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em]">
+                            {LIFT_LABELS[liftId]}: {weight} {unit}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Navigation */}
