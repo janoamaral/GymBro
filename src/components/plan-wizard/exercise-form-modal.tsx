@@ -25,6 +25,7 @@ interface ExerciseFormModalProps {
   readonly onClose: () => void;
   readonly onSave: (exercise: Exercise) => void;
   readonly initialExercise?: Exercise;
+  readonly accessoryOnly?: boolean;
 }
 
 type ExercisePickerValue = 'SQ' | 'DL' | 'BP' | 'custom';
@@ -53,12 +54,15 @@ export function ExerciseFormModal({
   onClose,
   onSave,
   initialExercise,
+  accessoryOnly = false,
 }: Readonly<ExerciseFormModalProps>) {
   const [name, setName] = useState(initialExercise?.name || '');
   const [liftId, setLiftId] = useState<ExercisePickerValue>(
-    initialExercise?.liftId || 'BP'
+    accessoryOnly ? 'custom' : (initialExercise?.liftId ?? 'BP')
   );
-  const [method, setMethod] = useState<'531' | 'none'>(initialExercise?.method || '531');
+  const [method, setMethod] = useState<'531' | 'none'>(
+    accessoryOnly ? 'none' : (initialExercise?.method ?? '531')
+  );
   const [oneRm, setOneRm] = useState(initialExercise?.oneRm?.toString() || '');
   const [sets, setSets] = useState<EditableSet[]>(() => {
     if (initialExercise?.sets && initialExercise.sets.length > 0) {
@@ -211,29 +215,31 @@ export function ExerciseFormModal({
     onClose();
   };
 
-  return (
+    return (
     <Modal isOpen={isOpen} onClose={onClose} title={initialExercise ? 'Editar Ejercicio' : 'Agregar Ejercicio'}>
       <div className="space-y-4">
-        <div>
-          <label htmlFor="exercise-picker" className="block text-sm font-medium text-gray-300 mb-2">
-            Ejercicio
-          </label>
-          <select
-            id="exercise-picker"
-            value={liftId}
-            onChange={(e) => setLiftId(e.target.value as ExercisePickerValue)}
-            title="Seleccionar ejercicio"
-            className="field-dark"
-          >
-            {PRESET_EXERCISES.map((ex) => (
-              <option key={ex.value} value={ex.value}>
-                {ex.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {!accessoryOnly && (
+          <div>
+            <label htmlFor="exercise-picker" className="block text-sm font-medium text-gray-300 mb-2">
+              Ejercicio
+            </label>
+            <select
+              id="exercise-picker"
+              value={liftId}
+              onChange={(e) => setLiftId(e.target.value as ExercisePickerValue)}
+              title="Seleccionar ejercicio"
+              className="field-dark"
+            >
+              {PRESET_EXERCISES.map((ex) => (
+                <option key={ex.value} value={ex.value}>
+                  {ex.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
-        {liftId === 'custom' && (
+        {(liftId === 'custom' || accessoryOnly) && (
           <div>
             <label htmlFor="custom-exercise-name" className="block text-sm font-medium text-gray-300 mb-2">
               Nombre del Ejercicio
@@ -249,33 +255,35 @@ export function ExerciseFormModal({
           </div>
         )}
 
-        <div>
-          <p className="block text-sm font-medium text-gray-300 mb-2">
-            Método
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setMethod('531')}
-              className={`flex-1 py-2 rounded-xl transition-colors ${
-                method === '531'
-                  ? 'btn-accent'
-                  : 'btn-dark'
-              }`}
-            >
-              5/3/1
-            </button>
-            <button
-              onClick={() => setMethod('none')}
-              className={`flex-1 py-2 rounded-xl transition-colors ${
-                method === 'none'
-                  ? 'btn-accent'
-                  : 'btn-dark'
-              }`}
-            >
-              None
-            </button>
+        {!accessoryOnly && (
+          <div>
+            <p className="block text-sm font-medium text-gray-300 mb-2">
+              Método
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMethod('531')}
+                className={`flex-1 py-2 rounded-xl transition-colors ${
+                  method === '531'
+                    ? 'btn-accent'
+                    : 'btn-dark'
+                }`}
+              >
+                5/3/1
+              </button>
+              <button
+                onClick={() => setMethod('none')}
+                className={`flex-1 py-2 rounded-xl transition-colors ${
+                  method === 'none'
+                    ? 'btn-accent'
+                    : 'btn-dark'
+                }`}
+              >
+                None
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div>
           <p className="block text-sm font-medium text-gray-300 mb-2">

@@ -280,15 +280,17 @@ export default function PlanPage() {
       </div>
 
       {/* Exercise Form Modal */}
-      <ExerciseFormModal
-        isOpen={showExerciseModal}
-        onClose={() => {
-          setShowExerciseModal(false);
-          setEditingIndex(null);
-        }}
-        onSave={handleAddExercise}
-        initialExercise={editingIndex === null ? undefined : exercises[editingIndex]}
-      />
+      {showExerciseModal && (
+        <ExerciseFormModal
+          isOpen={showExerciseModal}
+          onClose={() => {
+            setShowExerciseModal(false);
+            setEditingIndex(null);
+          }}
+          onSave={handleAddExercise}
+          initialExercise={editingIndex === null ? undefined : exercises[editingIndex]}
+        />
+      )}
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

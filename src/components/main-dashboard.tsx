@@ -7,8 +7,8 @@ import { Calendar } from '@/components/calendar';
 import { MeetCoefficientsCard } from '@/components/meet-coefficients-card';
 import { ProgressChart } from '@/components/progress-chart';
 import { NextWorkout } from '@/components/next-workout';
-import { NewCycleModal } from '@/components/new-cycle-modal';
 import { VolumeByLiftCard } from '@/components/volume-by-lift-card';
+import { Modal } from '@/components/ui/modal';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 import { cacheResource, getCachedResource } from '@/lib/offline-queue';
 
@@ -29,7 +29,7 @@ export default function MainDashboard({
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [workoutDays, setWorkoutDays] = useState<CalendarDateItem[]>([]);
-  const [showNewCycleModal, setShowNewCycleModal] = useState(false);
+  const [showPlanChooser, setShowPlanChooser] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const year = currentDate.getFullYear();
@@ -99,12 +99,6 @@ export default function MainDashboard({
 
   const handleDayClick = (date: string) => {
     router.push(`/workout/${date}`);
-  };
-
-  const handleNewCycleStart = () => {
-    // Reload calendar data
-    setCurrentDate(new Date());
-    setShowNewCycleModal(false);
   };
 
   const userInitial = userName.trim().charAt(0).toUpperCase();
@@ -186,28 +180,44 @@ export default function MainDashboard({
         {/* Action Buttons */}
         <div className="flex gap-4 justify-center">
           <button
-            onClick={() => router.push('/plan')}
+            onClick={() => setShowPlanChooser(true)}
             className="flex items-center gap-2 rounded-xl bg-[#d6ff43] px-6 py-3 font-semibold text-gray-900 transition-colors hover:bg-[#c4ec39]"
           >
             <Plus size={20} />
             Generar Plan
           </button>
-          <button
-            onClick={() => setShowNewCycleModal(true)}
-            className="panel-soft flex items-center gap-2 rounded-xl px-6 py-3 font-semibold text-white transition-colors hover:text-[#d6ff43]"
-          >
-            <Plus size={20} />
-            Nuevo Ciclo
-          </button>
         </div>
       </div>
 
-      {/* New Cycle Modal */}
-      <NewCycleModal
-        isOpen={showNewCycleModal}
-        onClose={() => setShowNewCycleModal(false)}
-        onStart={handleNewCycleStart}
-      />
+      {/* Plan Chooser Modal */}
+      <Modal
+        isOpen={showPlanChooser}
+        onClose={() => setShowPlanChooser(false)}
+        title="Nuevo Plan"
+      >
+        <div className="space-y-3">
+          <button
+            onClick={() => {
+              setShowPlanChooser(false);
+              router.push('/plan');
+            }}
+            className="btn-dark w-full px-4 py-4 text-left rounded-xl"
+          >
+            <p className="font-semibold text-white">Nuevo Plan</p>
+            <p className="text-sm text-gray-400">Una sola sesión con ejercicios personalizados</p>
+          </button>
+          <button
+            onClick={() => {
+              setShowPlanChooser(false);
+              router.push('/plan/monthly');
+            }}
+            className="btn-dark w-full px-4 py-4 text-left rounded-xl"
+          >
+            <p className="font-semibold text-white">Nuevo Plan Mensual</p>
+            <p className="text-sm text-gray-400">Plan 5/3/1 día por día, 4 semanas (ciclo completo)</p>
+          </button>
+        </div>
+      </Modal>
     </main>
   );
 }
