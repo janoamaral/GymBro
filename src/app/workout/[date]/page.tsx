@@ -14,6 +14,8 @@ import {
   enqueueReorderMutation,
   enqueueRescheduleMutation,
   getCachedWorkoutDay,
+  hasPendingMutationsForDay,
+  patchCachedSetsInDay,
 } from '@/lib/offline-queue';
 
 const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
@@ -28,6 +30,9 @@ interface Set {
   targetWeight: number;
   unit: string;
   isDone?: boolean;
+  setFeelingScore?: number | null;
+  rpe?: number | null;
+  rir?: number | null;
   exercise: {
     id: string;
     name: string;
@@ -101,6 +106,34 @@ const groupSetsByExercise = (sessions: SessionWithSets[]): ExerciseGroup[] => {
     }))
     .sort((a, b) => a.exerciseOrder - b.exerciseOrder);
 };
+
+function setsEqualForDisplay(a: SessionWithSets[], b: SessionWithSets[]): boolean {
+  const flatA = a.flatMap((s) => s.sets);
+  const flatB = b.flatMap((s) => s.sets);
+  if (flatA.length !== flatB.length) {
+    return false;
+  }
+
+  const mapB = new Map(flatB.map((s) => [s.id, s]));
+  for (const sa of flatA) {
+    const sb = mapB.get(sa.id);
+    if (!sb) {
+      return false;
+    }
+    if (
+      sa.isDone !== sb.isDone ||
+      sa.repsTarget !== sb.repsTarget ||
+      sa.targetWeight !== sb.targetWeight ||
+      sa.setFeelingScore !== sb.setFeelingScore ||
+      sa.rpe !== sb.rpe ||
+      sa.rir !== sb.rir ||
+      sa.exerciseOrder !== sb.exerciseOrder
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 function reorderExerciseGroups(
   groups: ExerciseGroup[],
@@ -207,8 +240,29 @@ export default function WorkoutDayPage() {
           return;
         }
 
-        setSessions(fetchedSessions);
-        setExercises(groupSetsByExercise(fetchedSessions));
+        // Si hay mutaciones pendientes para este día (offline queue),
+        // no pisar el estado local con el server stale.
+        const cachedSessions = (await getCachedWorkoutDay(date)) as SessionWithSets[] | null;
+        const currentSessionIds = (cachedSessions ?? []).map((s) => s.id);
+        const currentSetIds = (cachedSessions ?? []).flatMap((s) => s.sets.map((set) => set.id));
+        const hasPending = await hasPendingMutationsForDay(date, currentSessionIds, currentSetIds);
+        if (hasPending) {
+          return;
+        }
+
+        setSessions((prev) =>
+          setsEqualForDisplay(prev, fetchedSessions) ? prev : fetchedSessions,
+        );
+        setExercises((prev) => {
+          const next = groupSetsByExercise(fetchedSessions);
+          const prevKey = prev
+            .map((g) => `${g.exerciseId}:${g.exerciseOrder}:${g.sets.map((s) => `${s.id}:${s.isDone ? 1 : 0}`).join(',')}`)
+            .join('|');
+          const nextKey = next
+            .map((g) => `${g.exerciseId}:${g.exerciseOrder}:${g.sets.map((s) => `${s.id}:${s.isDone ? 1 : 0}`).join(',')}`)
+            .join('|');
+          return prevKey === nextKey ? prev : next;
+        });
         await cacheWorkoutDay(date, fetchedSessions);
       } catch {
         if (!cancelled && !hasCachedData) {
@@ -515,6 +569,10 @@ export default function WorkoutDayPage() {
 
     reorderFrameRef.current = globalThis.window.requestAnimationFrame(() => {
       setExercises(reordered);
+      const orderPatches = reordered.flatMap((group, idx) =>
+        group.sets.map((set) => ({ id: set.id, exerciseOrder: idx })),
+      );
+      void patchCachedSetsInDay(date, orderPatches);
       schedulePersistExerciseOrder(reordered.map((exercise) => exercise.exerciseId));
       reorderFrameRef.current = null;
     });

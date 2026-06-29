@@ -15,6 +15,7 @@ import {
   enqueueSetMutation,
   flushOfflineMutationQueue,
   getCachedWorkoutDay,
+  patchCachedSetsInDay,
 } from '@/lib/offline-queue';
 
 const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
@@ -475,6 +476,7 @@ export default function ExerciseDetailPage() {
     setSets((currentSets) =>
       currentSets.map((s) => (s.id === setId ? { ...s, setFeelingScore: score } : s))
     );
+    void patchCachedSetsInDay(date, [{ id: setId, setFeelingScore: score }]);
     scheduleSetMetricsUpdate(setId, set.sessionId, { setFeelingScore: score });
   };
 
@@ -485,6 +487,7 @@ export default function ExerciseDetailPage() {
       return;
     }
     setSets((currentSets) => currentSets.map((s) => (s.id === setId ? { ...s, rpe } : s)));
+    void patchCachedSetsInDay(date, [{ id: setId, rpe }]);
     scheduleSetMetricsUpdate(setId, set.sessionId, { rpe });
   };
 
@@ -495,6 +498,7 @@ export default function ExerciseDetailPage() {
       return;
     }
     setSets((currentSets) => currentSets.map((s) => (s.id === setId ? { ...s, rir } : s)));
+    void patchCachedSetsInDay(date, [{ id: setId, rir }]);
     scheduleSetMetricsUpdate(setId, set.sessionId, { rir });
   };
 
@@ -614,6 +618,7 @@ export default function ExerciseDetailPage() {
     setSets((currentSets) =>
       currentSets.map((s) => (s.id === setId ? { ...s, isDone: nextIsDone } : s))
     );
+    void patchCachedSetsInDay(date, [{ id: setId, isDone: nextIsDone }]);
     scheduleSetDoneUpdate(setId, set.sessionId, nextIsDone);
   };
 
@@ -677,6 +682,9 @@ export default function ExerciseDetailPage() {
           : currentSet
       )
     );
+    void patchCachedSetsInDay(date, [
+      { id: set.id, repsTarget: nextRepsTarget, targetWeight: nextTargetWeight },
+    ]);
 
     try {
       const response = await fetch(`/api/workouts/${set.sessionId}/sets/${set.id}`, {
