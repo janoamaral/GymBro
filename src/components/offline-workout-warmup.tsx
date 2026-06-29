@@ -5,16 +5,18 @@ import { useRouter } from 'next/navigation';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 import { cacheResource, cacheWorkoutDay } from '@/lib/offline-queue';
 
-type NextWorkoutSet = {
-  exercise: {
-    id: string;
-  };
-};
-
 type NextWorkoutSession = {
   id: string;
   startedAt: string;
-  sets: NextWorkoutSet[];
+  sets: Array<{ exercise: { id: string } }>;
+};
+
+type ByDateResponse = {
+  sessions: NextWorkoutSession[];
+};
+
+type NextResponse = {
+  session: NextWorkoutSession | null;
 };
 
 function formatLocalDate(date: Date): string {
@@ -31,9 +33,36 @@ export function OfflineWorkoutWarmup() {
     let cancelled = false;
 
     const warmup = async () => {
+      const localDate = formatLocalDate(new Date());
+
       try {
-        const localDate = formatLocalDate(new Date());
-        const data = await fetchJsonWithInFlightDedup<{ session: NextWorkoutSession | null }>(
+        const byDate = await fetchJsonWithInFlightDedup<ByDateResponse>(
+          `/api/workouts/by-date/${localDate}`,
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        const sessions = byDate.sessions ?? [];
+        if (sessions.length > 0) {
+          await cacheWorkoutDay(localDate, sessions);
+          router.prefetch(`/workout/${localDate}`);
+
+          const exerciseIds = Array.from(
+            new Set(sessions.flatMap((session) => session.sets.map((set) => set.exercise.id))),
+          );
+          exerciseIds.forEach((exerciseId) => {
+            router.prefetch(`/workout/${localDate}/${exerciseId}`);
+          });
+        }
+      } catch {
+        // Warmup best-effort.
+      }
+
+      // Keep next-workout card cache in sync (independent of by-date shape).
+      try {
+        const nextData = await fetchJsonWithInFlightDedup<NextResponse>(
           `/api/workouts/next?localDate=${localDate}`,
         );
 
@@ -41,18 +70,11 @@ export function OfflineWorkoutWarmup() {
           return;
         }
 
-        await cacheResource('next-workout', data.session);
+        await cacheResource('next-workout', nextData.session);
 
-        if (data.session) {
-          const sessionDate = data.session.startedAt.split('T')[0] ?? localDate;
-          await cacheWorkoutDay(sessionDate, [data.session]);
-
+        if (nextData.session) {
+          const sessionDate = nextData.session.startedAt.split('T')[0] ?? localDate;
           router.prefetch(`/workout/${sessionDate}`);
-
-          const exerciseIds = Array.from(new Set(data.session.sets.map((set) => set.exercise.id)));
-          exerciseIds.forEach((exerciseId) => {
-            router.prefetch(`/workout/${sessionDate}/${exerciseId}`);
-          });
         }
       } catch {
         // Warmup best-effort.

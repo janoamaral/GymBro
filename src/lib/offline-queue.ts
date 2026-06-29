@@ -383,7 +383,9 @@ export async function flushOfflineMutationQueue(): Promise<void> {
 
   try {
     let queue = await getAllQueueMutations();
-    dispatchSyncEvent("syncing", queue.length);
+    if (queue.length > 0) {
+      dispatchSyncEvent("syncing", queue.length);
+    }
 
     for (const mutation of queue) {
       try {
@@ -396,7 +398,9 @@ export async function flushOfflineMutationQueue(): Promise<void> {
         if (response.ok || response.status === 404) {
           await deleteQueueMutation(mutation.id);
           queue = queue.filter((item) => item.id !== mutation.id);
-          dispatchSyncEvent("syncing", queue.length);
+          if (queue.length > 0) {
+            dispatchSyncEvent("syncing", queue.length);
+          }
           continue;
         }
 
@@ -530,6 +534,91 @@ export async function getCachedResource<T>(key: string): Promise<T | null> {
 
 export async function listOfflineQueueMutations(): Promise<QueueMutation[]> {
   return getAllQueueMutations();
+}
+
+// ponytail: cache patched by set id only — keeps callers simple, no full-day reserialize.
+export async function patchCachedSetsInDay(
+  date: string,
+  setPatches: Array<{ id: string } & Record<string, unknown>>,
+): Promise<void> {
+  if (!canUseIndexedDb() || setPatches.length === 0) {
+    return;
+  }
+
+  const cached = await getCachedWorkoutDay(date);
+  if (!cached) {
+    return;
+  }
+
+  const sessions = cached as Array<{ sets?: Array<{ id: string } & Record<string, unknown>> }>;
+  const { sessions: merged, touched } = mergeSetPatchesIntoSessions(sessions, setPatches);
+
+  if (touched) {
+    await cacheWorkoutDay(date, merged);
+  }
+}
+
+export function mergeSetPatchesIntoSessions(
+  sessions: Array<{ sets?: Array<{ id: string } & Record<string, unknown>> }>,
+  setPatches: Array<{ id: string } & Record<string, unknown>>,
+): { sessions: typeof sessions; touched: boolean } {
+  if (setPatches.length === 0) {
+    return { sessions, touched: false };
+  }
+
+  const patchMap = new Map(setPatches.map((patch) => [patch.id, patch]));
+  let touched = false;
+
+  const next = sessions.map((session) => {
+    if (!Array.isArray(session.sets)) {
+      return session;
+    }
+
+    let sessionTouched = false;
+    const patchedSets = session.sets.map((set) => {
+      const patch = patchMap.get(set?.id);
+      if (!patch) {
+        return set;
+      }
+      sessionTouched = true;
+      return { ...set, ...patch };
+    });
+
+    if (!sessionTouched) {
+      return session;
+    }
+    touched = true;
+    return { ...session, sets: patchedSets };
+  });
+
+  if (!touched) {
+    return { sessions, touched: false };
+  }
+  return { sessions: next, touched };
+}
+
+export async function hasPendingMutationsForDay(
+  date: string,
+  sessionIds: string[],
+  setIds: string[],
+): Promise<boolean> {
+  if (!canUseIndexedDb()) {
+    return false;
+  }
+
+  const queue = await getAllQueueMutations();
+  const sessionIdSet = new Set(sessionIds);
+  const setIdSet = new Set(setIds);
+
+  return queue.some((mutation) => {
+    if (mutation.type === 'set_update') {
+      return setIdSet.has(mutation.targetId);
+    }
+    if (mutation.type === 'reorder_exercises') {
+      return mutation.targetId === date;
+    }
+    return sessionIdSet.has(mutation.targetId);
+  });
 }
 
 export const offlineSyncEventName = SYNC_EVENT_NAME;

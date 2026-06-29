@@ -38,11 +38,13 @@ export function OfflineSyncStatus() {
     };
 
     const handleVisibilityOrFocus = () => {
-      if (!navigator.onLine) {
-        return;
-      }
-
-      void flushOfflineMutationQueue();
+      // Lazy poll: solo flusheamos si hay algo pendiente.
+      void (async () => {
+        const pending = await getOfflineQueuePendingCount();
+        if (pending > 0 && navigator.onLine) {
+          void flushOfflineMutationQueue();
+        }
+      })();
     };
 
     const handleSyncEvent = (event: Event) => {
@@ -55,6 +57,9 @@ export function OfflineSyncStatus() {
     const hydratePendingCount = async () => {
       const pending = await getOfflineQueuePendingCount();
       setPendingCount(pending);
+      if (pending > 0 && navigator.onLine) {
+        void flushOfflineMutationQueue();
+      }
     };
 
     const intervalId = window.setInterval(() => {
@@ -70,7 +75,6 @@ export function OfflineSyncStatus() {
     window.addEventListener(offlineSyncEventName, handleSyncEvent as EventListener);
 
     void hydratePendingCount();
-    void flushOfflineMutationQueue();
 
     return () => {
       window.clearInterval(intervalId);
@@ -83,10 +87,6 @@ export function OfflineSyncStatus() {
   }, []);
 
   const message = useMemo(() => {
-    if (!isOnline) {
-      return 'Offline: los cambios se guardan localmente';
-    }
-
     if (status === 'syncing') {
       return pendingCount > 0 ? `Sincronizando (${pendingCount})...` : 'Sincronizando...';
     }
@@ -95,7 +95,7 @@ export function OfflineSyncStatus() {
       return errorMessage;
     }
 
-    if (pendingCount > 0) {
+    if (!isOnline && pendingCount > 0) {
       return `${pendingCount} cambio${pendingCount === 1 ? '' : 's'} pendiente${pendingCount === 1 ? '' : 's'}`;
     }
 
