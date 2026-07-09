@@ -20,6 +20,11 @@ import {
 
 const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
 const KG_PLATE_OPTIONS = [25, 20, 15, 10, 5, 2.5, 1.25] as const;
+const FEELING_OPTIONS = [
+  { emoji: '😩', label: 'Cansado', score: 1 },
+  { emoji: '😑', label: 'Regular', score: 3 },
+  { emoji: '💪', label: 'Bien', score: 5 },
+] as const;
 
 interface Set {
   id: string;
@@ -480,17 +485,6 @@ export default function ExerciseDetailPage() {
     scheduleSetMetricsUpdate(setId, set.sessionId, { setFeelingScore: score });
   };
 
-  const handleRpeChange = (setId: string, rpe: number) => {
-    setSyncError('');
-    const set = sets.find((item) => item.id === setId);
-    if (!set) {
-      return;
-    }
-    setSets((currentSets) => currentSets.map((s) => (s.id === setId ? { ...s, rpe } : s)));
-    void patchCachedSetsInDay(date, [{ id: setId, rpe }]);
-    scheduleSetMetricsUpdate(setId, set.sessionId, { rpe });
-  };
-
   const handleRirChange = (setId: string, rir: number) => {
     setSyncError('');
     const set = sets.find((item) => item.id === setId);
@@ -615,11 +609,18 @@ export default function ExerciseDetailPage() {
       }
     }
 
+    const nextRir = nextIsDone && set.rir === null ? 2 : set.rir;
+
     setSets((currentSets) =>
-      currentSets.map((s) => (s.id === setId ? { ...s, isDone: nextIsDone } : s))
+      currentSets.map((s) =>
+        s.id === setId ? { ...s, isDone: nextIsDone, rir: nextRir } : s
+      )
     );
-    void patchCachedSetsInDay(date, [{ id: setId, isDone: nextIsDone }]);
+    void patchCachedSetsInDay(date, [{ id: setId, isDone: nextIsDone, ...(nextRir !== set.rir ? { rir: nextRir } : {}) }]);
     scheduleSetDoneUpdate(setId, set.sessionId, nextIsDone);
+    if (nextRir !== set.rir) {
+      scheduleSetMetricsUpdate(setId, set.sessionId, { rir: nextRir });
+    }
   };
 
   const handleOpenCalculator = (weight: number, unit: 'kg' | 'lb') => {
@@ -762,67 +763,76 @@ export default function ExerciseDetailPage() {
     if (!set.isDone) {
       return (
         <p className={isNext ? 'mb-2 text-xs font-semibold text-[#101010]/80' : 'mb-2 text-xs text-gray-400'}>
-          Marca este set como completado para registrar feeling, RPE y RIR.
+          Marca este set como completado para registrar feeling y RIR.
         </p>
       );
     }
 
+    const rirValue = set.rir ?? 2;
+    const rirPct = (rirValue / 10) * 100;
+    const rirFilled = isNext ? '#101010' : '#d6ff43';
+    const rirTrack = isNext ? '#eaffb0' : '#1f2630';
+
     return (
       <div className="mb-2 space-y-4">
         <div>
-          <label className={isNext ? 'block text-xs font-bold text-[#101010] mb-1' : 'block text-xs font-medium text-gray-300 mb-1'}>
-            Feeling: {set.setFeelingScore ?? '—'}
-          </label>
-          <div className="flex items-center gap-3">
-            <span className={isNext ? 'text-xs text-[#101010] w-14' : 'text-xs text-gray-400 w-14'}>Muy cansado</span>
-            <input
-              type="range"
-              min="1"
-              max="5"
-              value={set.setFeelingScore ?? 3}
-              onChange={(e) =>
-                handleSetFeelingChange(set.id, Number.parseInt(e.target.value, 10))
-              }
-              title={`Sensación del set ${set.setNumber}`}
-              aria-label={`Sensación del set ${set.setNumber}`}
-              className={isNext ? 'flex-1 h-2 appearance-none rounded-lg bg-[#eaffb0] accent-[#101010] cursor-pointer' : 'flex-1 h-2 appearance-none rounded-lg bg-[#1f2630] accent-[#d6ff43] cursor-pointer'}
-            />
-            <span className={isNext ? 'text-xs text-[#101010] w-20' : 'text-xs text-gray-400 w-20'}>Lightweight 💪</span>
+          <span className={isNext ? 'block text-xs font-bold text-[#101010] mb-2' : 'block text-xs font-medium text-gray-300 mb-2'}>
+            RIR: {rirValue}
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={10}
+            step={1}
+            value={rirValue}
+            onChange={(e) => handleRirChange(set.id, Number.parseInt(e.target.value, 10))}
+            title={`RIR del set ${set.setNumber}`}
+            aria-label={`RIR del set ${set.setNumber}`}
+            className={isNext ? 'w-full h-2 appearance-none rounded-lg accent-[#101010] cursor-pointer' : 'w-full h-2 appearance-none rounded-lg accent-[#d6ff43] cursor-pointer'}
+            style={{ backgroundImage: `linear-gradient(to right, ${rirFilled} 0%, ${rirFilled} ${rirPct}%, ${rirTrack} ${rirPct}%, ${rirTrack} 100%)` }}
+          />
+          <div className={isNext ? 'mt-1 flex justify-between text-[10px] text-[#101010]/50' : 'mt-1 flex justify-between text-[10px] text-gray-500'}>
+            {Array.from({ length: 11 }, (_, i) => (
+              <span key={i}>{i}</span>
+            ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <label className="flex flex-col gap-2">
-            <span className={isNext ? 'text-xs font-bold text-[#101010]' : 'text-xs font-medium text-gray-300'}>
-              RPE: {set.rpe ?? '—'}
-            </span>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={set.rpe ?? 6}
-              onChange={(e) => handleRpeChange(set.id, Number.parseInt(e.target.value, 10))}
-              title={`RPE del set ${set.setNumber}`}
-              aria-label={`RPE del set ${set.setNumber}`}
-              className={isNext ? 'h-2 appearance-none rounded-lg bg-[#eaffb0] accent-[#101010] cursor-pointer' : 'h-2 appearance-none rounded-lg bg-[#1f2630] accent-[#d6ff43] cursor-pointer'}
-            />
-          </label>
-
-          <label className="flex flex-col gap-2">
-            <span className={isNext ? 'text-xs font-bold text-[#101010]' : 'text-xs font-medium text-gray-300'}>
-              RIR: {set.rir ?? '—'}
-            </span>
-            <input
-              type="range"
-              min="0"
-              max="10"
-              value={set.rir ?? 2}
-              onChange={(e) => handleRirChange(set.id, Number.parseInt(e.target.value, 10))}
-              title={`RIR del set ${set.setNumber}`}
-              aria-label={`RIR del set ${set.setNumber}`}
-              className={isNext ? 'h-2 appearance-none rounded-lg bg-[#eaffb0] accent-[#101010] cursor-pointer' : 'h-2 appearance-none rounded-lg bg-[#1f2630] accent-[#d6ff43] cursor-pointer'}
-            />
-          </label>
+        <div>
+          <span className={isNext ? 'block text-xs font-bold text-[#101010] mb-2' : 'block text-xs font-medium text-gray-300 mb-2'}>
+            Feeling
+          </span>
+          <div className="grid grid-cols-3 gap-2">
+            {FEELING_OPTIONS.map(({ emoji, label, score }) => {
+              const selected = set.setFeelingScore === score;
+              return (
+                <button
+                  key={score}
+                  type="button"
+                  onClick={() => handleSetFeelingChange(set.id, score)}
+                  title={`Feeling: ${label}`}
+                  aria-label={`Marcar feeling como ${label}`}
+                  aria-pressed={selected}
+                  className={
+                    isNext
+                      ? `flex flex-col items-center gap-1 rounded-xl border px-2 pt-3 pb-2 text-xs font-semibold transition-colors ${
+                          selected
+                            ? 'border-[#101010] bg-[#101010] text-white'
+                            : 'border-[#101010]/20 text-[#101010]/70'
+                        }`
+                      : `flex flex-col items-center gap-1 rounded-xl border px-2 pt-3 pb-2 text-xs font-semibold transition-colors ${
+                          selected
+                            ? 'border-[#d6ff43] bg-[#d6ff43] text-[#101010]'
+                            : 'border-white/15 text-gray-300'
+                        }`
+                  }
+                >
+                  <span className="text-xl leading-none">{emoji}</span>
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -998,10 +1008,11 @@ export default function ExerciseDetailPage() {
                 {/* Feeling: solo despues de completar el set */}
                 {renderFeelingSection(set, isNext)}
 
-                {set.isDone && (
+                {set.isDone && set.setFeelingScore !== null && (
                   <div className={isNext ? 'mt-2 flex flex-wrap gap-2 text-xs font-semibold text-[#101010]' : 'mt-2 flex flex-wrap gap-2 text-xs font-semibold text-gray-300'}>
-                    <span className={isNext ? 'rounded-full bg-[#101010]/10 px-2 py-1' : 'rounded-full bg-white/5 px-2 py-1'}>RPE {set.rpe ?? '—'}</span>
-                    <span className={isNext ? 'rounded-full bg-[#101010]/10 px-2 py-1' : 'rounded-full bg-white/5 px-2 py-1'}>RIR {set.rir ?? '—'}</span>
+                    <span className={isNext ? 'rounded-full bg-[#101010]/10 px-2 py-1' : 'rounded-full bg-white/5 px-2 py-1'}>
+                      {FEELING_OPTIONS.find((o) => o.score === set.setFeelingScore)?.emoji ?? '—'} Feeling
+                    </span>
                   </div>
                 )}
 
