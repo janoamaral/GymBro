@@ -890,19 +890,19 @@ export default function ExerciseDetailPage() {
   const editingSet = editingSetId ? sets.find((set) => set.id === editingSetId) ?? null : null;
 
   return (
-    <main className="app-canvas min-h-screen px-4 py-8 sm:px-6 lg:px-8">
-      <div className="max-w-md mx-auto">
-        {/* Header tipo portada */}
-        <div className="relative mb-10 pl-14">
+    <main className="app-canvas min-h-screen">
+      {/* Header tipo portada: sticky full-width, contenido centrado, fijo al top del viewport */}
+      <div className="sticky top-0 z-30 w-full bg-[#030405]/85 backdrop-blur-sm">
+        <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-6 flex gap-4">
           <button
             onClick={() => router.back()}
             title="Volver"
             aria-label="Volver"
-            className="btn-dark absolute left-0 top-1 h-10 w-10 p-2"
+            className="btn-dark h-10 w-10 p-2 shrink-0"
           >
             <ArrowLeft size={24} className="text-white" />
           </button>
-          <div>
+          <div className="min-w-0">
             <h1
               className={`text-4xl sm:text-5xl font-heading font-black leading-tight text-white drop-shadow-md uppercase transition-all duration-300 ease-out ${isTitleEntering ? 'translate-y-10 scale-90 opacity-50' : 'translate-y-0 scale-100 opacity-100'}`}
             >
@@ -923,7 +923,9 @@ export default function ExerciseDetailPage() {
             )}
           </div>
         </div>
+      </div>
 
+      <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 pt-4">
         {syncError && (
           <div className="mb-4 rounded-lg border border-amber-300/50 bg-amber-300/15 px-3 py-2 text-xs font-semibold text-amber-100">
             {syncError}
