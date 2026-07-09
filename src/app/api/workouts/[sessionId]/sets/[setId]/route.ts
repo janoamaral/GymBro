@@ -7,8 +7,10 @@ import { logAmrap } from "@/lib/training/531";
 
 const updateSetSchema = z.object({
   repsDone: z.number().int().min(1).max(100).nullable().optional(),
-  repsTarget: z.number().int().min(1).max(100).optional(),
-  targetWeight: z.number().positive().optional(),
+  repsTarget: z.number().int().min(1).max(1000).optional(),
+  targetWeight: z.number().min(0).optional(),
+  durationSeconds: z.number().int().min(1).max(86400).nullable().optional(),
+  distanceMeters: z.number().min(0.1).max(100000).nullable().optional(),
   logAsAmrap: z.boolean().optional(),
   isDone: z.boolean().optional(),
   setFeelingScore: z.number().int().min(1).max(5).nullable().optional(),
@@ -58,6 +60,8 @@ export async function PATCH(
         repsDone: payload.repsDone,
         repsTarget: payload.repsTarget,
         targetWeight: payload.targetWeight,
+        durationSeconds: payload.durationSeconds,
+        distanceMeters: payload.distanceMeters,
         e1rm: amrapResult?.e1rm,
         amrapStatus: amrapResult?.status,
         amrapLoggedAt: amrapResult ? new Date() : undefined,

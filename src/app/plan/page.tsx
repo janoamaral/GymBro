@@ -134,6 +134,9 @@ export default function PlanPage() {
 
       if (!res.ok) {
         const data = await res.json();
+        if (Array.isArray(data.issues) && data.issues.length > 0) {
+          throw new Error(data.issues.map((i: { path?: unknown; message?: string }) => `${Array.isArray(i.path) ? i.path.join('.') : 'set'}: ${i.message ?? 'invalid'}`).join(' • '));
+        }
         throw new Error(data.detail || 'Failed to generate plan');
       }
 

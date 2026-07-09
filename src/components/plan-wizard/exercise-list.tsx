@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type TouchEvent } from 'react';
 import { Trash2, Edit2 } from 'lucide-react';
-import { Exercise } from './exercise-form-modal';
+import { Exercise, type ExerciseSetInput } from './exercise-form-modal';
 
 const TOUCH_DRAG_THRESHOLD_PX = 12;
 
@@ -180,24 +180,54 @@ export function ExerciseList({
     resetDragState();
   };
 
+  const formatSetMeasure = (set: ExerciseSetInput): string => {
+    if (set.durationSeconds != null) return `${set.durationSeconds}s`;
+    if (set.distanceMeters != null) return `${set.distanceMeters}m`;
+    return `${set.reps ?? '?'} reps`;
+  };
+
+  const weightLabel = (weight: number, bodyweight?: boolean): string =>
+    bodyweight || weight === 0 ? 'BW' : `${weight}`;
+
   const formatNon531Summary = (exercise: Exercise) => {
     const sets = exercise.sets ??
-      (exercise.weight && exercise.reps ? [{ weight: exercise.weight, reps: exercise.reps }] : []);
+      (exercise.weight && exercise.reps
+        ? [{
+            weight: exercise.weight,
+            reps: exercise.reps,
+            durationSeconds: exercise.durationSeconds,
+            distanceMeters: exercise.distanceMeters,
+            bodyweight: exercise.bodyweight,
+          }]
+        : []);
 
     if (sets.length === 0) {
       return 'Sin sets definidos';
     }
 
     const allIdentical = sets.every(
-      (set) => set.weight === sets[0].weight && set.reps === sets[0].reps
+      (set) =>
+        set.weight === sets[0].weight &&
+        set.bodyweight === sets[0].bodyweight &&
+        set.reps === sets[0].reps &&
+        set.durationSeconds === sets[0].durationSeconds &&
+        set.distanceMeters === sets[0].distanceMeters
     );
 
     if (allIdentical) {
-      return `${sets.length} x ${sets[0].reps} reps @ ${sets[0].weight} ${exercise.unit}`;
+      const measure = formatSetMeasure(sets[0]);
+      const w = weightLabel(Number(sets[0].weight), sets[0].bodyweight);
+      const weightSuffix = sets[0].bodyweight || Number(sets[0].weight) === 0 ? '' : ` ${exercise.unit}`;
+      return `${sets.length} x ${measure} @ ${w}${weightSuffix}`;
     }
 
     return sets
-      .map((set, index) => `S${index + 1}: ${set.reps} @ ${set.weight} ${exercise.unit}`)
+      .map((set, index) => {
+        const measure = formatSetMeasure(set);
+        const w = weightLabel(Number(set.weight), set.bodyweight);
+        const weightSuffix = set.bodyweight || Number(set.weight) === 0 ? '' : ` ${exercise.unit}`;
+        return `S${index + 1}: ${measure} @ ${w}${weightSuffix}`;
+      })
       .join(' • ');
   };
 

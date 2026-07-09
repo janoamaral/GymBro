@@ -15,6 +15,8 @@ type SetUpdatePayload = {
   isDone?: boolean;
   repsTarget?: number;
   targetWeight?: number;
+  durationSeconds?: number | null;
+  distanceMeters?: number | null;
 };
 
 type QueueMutationPayload =

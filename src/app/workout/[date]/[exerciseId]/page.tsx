@@ -5,10 +5,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Calculator, Dumbbell, Pencil, Timer } from 'lucide-react';
 import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
 import { RestTimerModal } from '@/components/rest-timer-modal';
+import { HangTimerModal } from '@/components/hang-timer-modal';
 import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 import { convertWeight, roundTo, type WeightUnit } from '@/lib/units/conversion';
+import { inferMeasureFromSet, type SetMeasure } from '@/components/plan-wizard/exercise-form-modal';
 import {
   acknowledgeSetMutationFields,
   cacheWorkoutDay,
@@ -34,6 +36,8 @@ interface Set {
   repsTarget: number;
   targetWeight: number;
   unit: string;
+  durationSeconds: number | null;
+  distanceMeters: number | null;
   isDone: boolean;
   setFeelingScore: number | null;
   rpe: number | null;
@@ -48,7 +52,7 @@ interface SessionWithSets {
   sets: Set[];
 }
 
-type SetServerSnapshot = Pick<Set, 'repsTarget' | 'targetWeight' | 'setFeelingScore' | 'rpe' | 'rir' | 'isDone'>;
+type SetServerSnapshot = Pick<Set, 'repsTarget' | 'targetWeight' | 'durationSeconds' | 'distanceMeters' | 'setFeelingScore' | 'rpe' | 'rir' | 'isDone'>;
 type SetSyncState = {
   metricsQueued: boolean;
   metricsInFlight: boolean;
@@ -60,6 +64,20 @@ const extractExerciseSets = (sessions: SessionWithSets[], exerciseId: string): S
   sessions
     .flatMap((session) => session.sets)
     .filter((set) => set.exercise.id === exerciseId);
+
+function formatSetLine(set: Set): string {
+  const measure = inferMeasureFromSet(set);
+  const volume =
+    measure === 'time'
+      ? `${set.durationSeconds}s`
+      : measure === 'distance'
+        ? `${set.distanceMeters}m`
+        : `${set.repsTarget} reps`;
+
+  const weight = Number(set.targetWeight);
+  const weightLabel = weight === 0 ? 'BW' : `${weight} ${set.unit}`;
+  return `${volume} @ ${weightLabel}`;
+}
 
 export default function ExerciseDetailPage() {
   const router = useRouter();
@@ -74,7 +92,9 @@ export default function ExerciseDetailPage() {
   const [savingSetIds, setSavingSetIds] = useState<Record<string, boolean>>({});
   const [showCalculator, setShowCalculator] = useState(false);
   const [restTimerSeconds, setRestTimerSeconds] = useState(90);
+  const [setupTimeSeconds, setSetupTimeSeconds] = useState(15);
   const [showRestTimer, setShowRestTimer] = useState(false);
+  const [hangTimerSetId, setHangTimerSetId] = useState<string | null>(null);
   const [calculatorWeight, setCalculatorWeight] = useState(0);
   const [calculatorUnit, setCalculatorUnit] = useState<'kg' | 'lb'>('kg');
   const [availablePlatesKg, setAvailablePlatesKg] = useState<number[]>([...KG_PLATE_OPTIONS]);
@@ -89,7 +109,11 @@ export default function ExerciseDetailPage() {
   const [isExerciseCompletionAnimating, setIsExerciseCompletionAnimating] = useState(false);
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
   const [editRepsTarget, setEditRepsTarget] = useState('');
+  const [editDurationSeconds, setEditDurationSeconds] = useState('');
+  const [editDistanceMeters, setEditDistanceMeters] = useState('');
+  const [editMeasure, setEditMeasure] = useState<SetMeasure>('reps');
   const [editTargetWeight, setEditTargetWeight] = useState('');
+  const [editBodyweight, setEditBodyweight] = useState(false);
   const [editUnit, setEditUnit] = useState<WeightUnit>('kg');
   const [isEditSaving, setIsEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
@@ -148,6 +172,8 @@ export default function ExerciseDetailPage() {
       confirmedSetValuesRef.current[set.id] = {
         repsTarget: set.repsTarget,
         targetWeight: set.targetWeight,
+        durationSeconds: set.durationSeconds,
+        distanceMeters: set.distanceMeters,
         setFeelingScore: set.setFeelingScore,
         rpe: set.rpe,
         rir: set.rir,
@@ -283,10 +309,15 @@ export default function ExerciseDetailPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchJsonWithInFlightDedup<{ settings?: { restTimerSeconds?: number } }>('/api/user/settings')
+    fetchJsonWithInFlightDedup<{ settings?: { restTimerSeconds?: number; setupTimeSeconds?: number } }>('/api/user/settings')
       .then((data) => {
-        if (!cancelled && data.settings?.restTimerSeconds) {
-          setRestTimerSeconds(data.settings.restTimerSeconds);
+        if (cancelled) return;
+        const settings = data.settings;
+        if (settings?.restTimerSeconds) {
+          setRestTimerSeconds(settings.restTimerSeconds);
+        }
+        if (settings?.setupTimeSeconds && settings.setupTimeSeconds > 0) {
+          setSetupTimeSeconds(settings.setupTimeSeconds);
         }
       })
       .catch(() => {
@@ -632,8 +663,12 @@ export default function ExerciseDetailPage() {
   const handleOpenSetEdit = (set: Set) => {
     setEditError('');
     setEditingSetId(set.id);
+    setEditMeasure(inferMeasureFromSet(set));
     setEditRepsTarget(String(set.repsTarget));
+    setEditDurationSeconds(set.durationSeconds != null ? String(set.durationSeconds) : '');
+    setEditDistanceMeters(set.distanceMeters != null ? String(set.distanceMeters) : '');
     setEditTargetWeight(String(set.targetWeight));
+    setEditBodyweight(Number(set.targetWeight) === 0);
     setEditUnit((set.unit === 'lb' ? 'lb' : 'kg') as WeightUnit);
   };
 
@@ -653,21 +688,45 @@ export default function ExerciseDetailPage() {
     }
 
     const nextRepsTarget = Number.parseInt(editRepsTarget, 10);
-    const nextTargetWeight = Number.parseFloat(editTargetWeight);
+    const nextDurationSeconds = Number.parseInt(editDurationSeconds, 10);
+    const nextDistanceMeters = Number.parseFloat(editDistanceMeters);
 
-    if (!Number.isInteger(nextRepsTarget) || nextRepsTarget < 1 || nextRepsTarget > 100) {
-      setEditError('Las repeticiones deben estar entre 1 y 100.');
+    if (editMeasure === 'reps') {
+      if (!Number.isInteger(nextRepsTarget) || nextRepsTarget < 1 || nextRepsTarget > 1000) {
+        setEditError('Las repeticiones deben estar entre 1 y 1000.');
+        return;
+      }
+    }
+    if (editMeasure === 'time') {
+      if (!Number.isInteger(nextDurationSeconds) || nextDurationSeconds < 1 || nextDurationSeconds > 86400) {
+        setEditError('El tiempo debe estar entre 1s y 86400s.');
+        return;
+      }
+    }
+    if (editMeasure === 'distance') {
+      if (!Number.isFinite(nextDistanceMeters) || nextDistanceMeters <= 0 || nextDistanceMeters > 100000) {
+        setEditError('La distancia debe ser mayor que 0.');
+        return;
+      }
+    }
+
+    let nextTargetWeight = editBodyweight ? 0 : Number.parseFloat(editTargetWeight);
+    if (editBodyweight) {
+      nextTargetWeight = 0;
+    } else if (!Number.isFinite(nextTargetWeight) || nextTargetWeight < 0) {
+      setEditError('El peso debe ser mayor o igual a 0.');
       return;
     }
 
-    if (!Number.isFinite(nextTargetWeight) || nextTargetWeight <= 0) {
-      setEditError('El peso debe ser mayor que 0.');
-      return;
-    }
+    const nextReps = editMeasure === 'reps' ? nextRepsTarget : 1;
+    const nextDuration = editMeasure === 'time' ? nextDurationSeconds : null;
+    const nextDistance = editMeasure === 'distance' ? nextDistanceMeters : null;
 
     const confirmedBeforeEdit = confirmedSetValuesRef.current[set.id] ?? {
       repsTarget: set.repsTarget,
       targetWeight: set.targetWeight,
+      durationSeconds: set.durationSeconds,
+      distanceMeters: set.distanceMeters,
       setFeelingScore: set.setFeelingScore,
       rpe: set.rpe,
       rir: set.rir,
@@ -679,13 +738,39 @@ export default function ExerciseDetailPage() {
     setSets((currentSets) =>
       currentSets.map((currentSet) =>
         currentSet.id === set.id
-          ? { ...currentSet, repsTarget: nextRepsTarget, targetWeight: nextTargetWeight }
+          ? {
+              ...currentSet,
+              repsTarget: nextReps,
+              targetWeight: nextTargetWeight,
+              durationSeconds: nextDuration,
+              distanceMeters: nextDistance,
+            }
           : currentSet
       )
     );
     void patchCachedSetsInDay(date, [
-      { id: set.id, repsTarget: nextRepsTarget, targetWeight: nextTargetWeight },
+      {
+        id: set.id,
+        repsTarget: nextReps,
+        targetWeight: nextTargetWeight,
+        durationSeconds: nextDuration,
+        distanceMeters: nextDistance,
+      },
     ]);
+
+    const payload = {
+      repsTarget: nextReps,
+      targetWeight: nextTargetWeight,
+      durationSeconds: nextDuration,
+      distanceMeters: nextDistance,
+    };
+
+    const persistConfirmed = () => {
+      confirmedSetValuesRef.current[set.id] = {
+        ...confirmedBeforeEdit,
+        ...payload,
+      };
+    };
 
     try {
       const response = await fetch(`/api/workouts/${set.sessionId}/sets/${set.id}`, {
@@ -693,23 +778,13 @@ export default function ExerciseDetailPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          repsTarget: nextRepsTarget,
-          targetWeight: nextTargetWeight,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         if (response.status === 429 || response.status >= 500) {
-          await enqueueSetMutation(set.id, set.sessionId, {
-            repsTarget: nextRepsTarget,
-            targetWeight: nextTargetWeight,
-          });
-          confirmedSetValuesRef.current[set.id] = {
-            ...confirmedBeforeEdit,
-            repsTarget: nextRepsTarget,
-            targetWeight: nextTargetWeight,
-          };
+          await enqueueSetMutation(set.id, set.sessionId, payload);
+          persistConfirmed();
           setSyncError('Guardado offline. Se sincronizará cuando vuelva internet.');
           setEditingSetId(null);
           return;
@@ -719,24 +794,13 @@ export default function ExerciseDetailPage() {
         throw new Error(data?.detail ?? data?.error ?? 'FAILED_TO_UPDATE_SET');
       }
 
-      confirmedSetValuesRef.current[set.id] = {
-        ...confirmedBeforeEdit,
-        repsTarget: nextRepsTarget,
-        targetWeight: nextTargetWeight,
-      };
-      await acknowledgeSetMutationFields(set.id, ['repsTarget', 'targetWeight']);
+      persistConfirmed();
+      await acknowledgeSetMutationFields(set.id, ['repsTarget', 'targetWeight', 'durationSeconds', 'distanceMeters']);
       setEditingSetId(null);
     } catch (err) {
       if (!navigator.onLine || err instanceof TypeError) {
-        await enqueueSetMutation(set.id, set.sessionId, {
-          repsTarget: nextRepsTarget,
-          targetWeight: nextTargetWeight,
-        });
-        confirmedSetValuesRef.current[set.id] = {
-          ...confirmedBeforeEdit,
-          repsTarget: nextRepsTarget,
-          targetWeight: nextTargetWeight,
-        };
+        await enqueueSetMutation(set.id, set.sessionId, payload);
+        persistConfirmed();
         setSyncError('Guardado offline. Se sincronizará cuando vuelva internet.');
         setEditingSetId(null);
       } else {
@@ -748,6 +812,8 @@ export default function ExerciseDetailPage() {
                   ...currentSet,
                   repsTarget: confirmedBeforeEdit.repsTarget,
                   targetWeight: confirmedBeforeEdit.targetWeight,
+                  durationSeconds: confirmedBeforeEdit.durationSeconds,
+                  distanceMeters: confirmedBeforeEdit.distanceMeters,
                 }
               : currentSet
           )
@@ -979,7 +1045,7 @@ export default function ExerciseDetailPage() {
                           isSetCompletionAnimating ? 'set-reps-line__label--animate' : ''
                         }`}
                       >
-                        {set.repsTarget} reps @ {set.targetWeight} {set.unit}
+                        {formatSetLine(set)}
                       </span>
                       {set.isDone && (
                         <span
@@ -992,16 +1058,35 @@ export default function ExerciseDetailPage() {
                     </span>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleDone(set.id)}
-                      title={`Marcar set ${set.setNumber} como ${set.isDone ? 'pendiente' : 'completado'}`}
-                      aria-label={`Marcar set ${set.setNumber} como ${set.isDone ? 'pendiente' : 'completado'}`}
-                      className={`set-status-pill ${isNext ? 'set-status-pill--next' : 'set-status-pill--base'} ${set.isDone ? 'set-status-pill--done' : 'set-status-pill--pending'}`}
-                    >
-                      <Dumbbell size={13} className="shrink-0" />
-                      <span>{set.isDone ? 'Completado' : 'Pendiente'}</span>
-                    </button>
+                    {(() => {
+                      const isTimeBased = inferMeasureFromSet(set) === 'time' && !set.isDone;
+                      if (isTimeBased) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setHangTimerSetId(set.id)}
+                            title={`Iniciar set ${set.setNumber}`}
+                            aria-label={`Iniciar set ${set.setNumber}`}
+                            className={`set-status-pill ${isNext ? 'set-status-pill--next' : 'set-status-pill--base'} set-status-pill--pending`}
+                          >
+                            <Timer size={13} className="shrink-0" />
+                            <span>Iniciar</span>
+                          </button>
+                        );
+                      }
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDone(set.id)}
+                          title={`Marcar set ${set.setNumber} como ${set.isDone ? 'pendiente' : 'completado'}`}
+                          aria-label={`Marcar set ${set.setNumber} como ${set.isDone ? 'pendiente' : 'completado'}`}
+                          className={`set-status-pill ${isNext ? 'set-status-pill--next' : 'set-status-pill--base'} ${set.isDone ? 'set-status-pill--done' : 'set-status-pill--pending'}`}
+                        >
+                          <Dumbbell size={13} className="shrink-0" />
+                          <span>{set.isDone ? 'Completado' : 'Pendiente'}</span>
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -1073,56 +1158,156 @@ export default function ExerciseDetailPage() {
         onClose={() => setShowRestTimer(false)}
       />
 
+      <HangTimerModal
+        isOpen={hangTimerSetId !== null}
+        setupSeconds={setupTimeSeconds}
+        workoutSeconds={(() => {
+          const activeSet = sets.find((s) => s.id === hangTimerSetId);
+          return Number(activeSet?.durationSeconds ?? 0);
+        })()}
+        onComplete={() => {
+          const activeSetId = hangTimerSetId;
+          setHangTimerSetId(null);
+          if (activeSetId) {
+            const activeSet = sets.find((s) => s.id === activeSetId);
+            if (activeSet && !activeSet.isDone) {
+              handleToggleDone(activeSetId);
+            }
+          }
+        }}
+      />
+
       <Modal isOpen={editingSet !== null} onClose={handleCloseSetEdit} title={editingSet ? `Editar serie ${editingSet.setNumber}` : 'Editar serie'}>
         {editingSet && (
           <div className="space-y-4">
             <p className="text-sm text-gray-300">
-              Ajustá las repeticiones o el peso objetivo de esta serie.
+              Ajustá la medida y el peso objetivo de esta serie.
             </p>
 
-            <label className="block space-y-2">
+            <div className="block space-y-2">
               <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
-                Repeticiones
+                Medida
               </span>
-              <input
-                type="number"
-                min="1"
-                max="100"
-                step="1"
-                value={editRepsTarget}
-                onChange={(event) => setEditRepsTarget(event.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#d6ff43]/60"
-              />
-            </label>
+              <div className="flex gap-2">
+                {([
+                  { value: 'reps', label: 'Reps' },
+                  { value: 'time', label: 'Tiempo (s)' },
+                  { value: 'distance', label: 'Distancia (m)' },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setEditMeasure(opt.value)}
+                    className={`flex-1 py-2 rounded-xl text-sm transition-colors ${
+                      editMeasure === opt.value ? 'btn-accent' : 'btn-dark'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {editMeasure === 'reps' && (
+              <label className="block space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                  Repeticiones
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  step="1"
+                  value={editRepsTarget}
+                  onChange={(event) => setEditRepsTarget(event.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#d6ff43]/60"
+                />
+              </label>
+            )}
+
+            {editMeasure === 'time' && (
+              <label className="block space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                  Segundos
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  max="86400"
+                  step="1"
+                  value={editDurationSeconds}
+                  onChange={(event) => setEditDurationSeconds(event.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#d6ff43]/60"
+                />
+              </label>
+            )}
+
+            {editMeasure === 'distance' && (
+              <label className="block space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                  Metros
+                </span>
+                <input
+                  type="number"
+                  min="0.1"
+                  step="0.5"
+                  value={editDistanceMeters}
+                  onChange={(event) => setEditDistanceMeters(event.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#d6ff43]/60"
+                />
+              </label>
+            )}
 
             <div className="block space-y-2">
               <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
                 Peso objetivo
               </span>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={editTargetWeight}
-                  onChange={(event) => setEditTargetWeight(event.target.value)}
-                  className="flex-1 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#d6ff43]/60"
-                />
+              {editBodyweight ? (
+                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                  <span className="text-white">Peso corporal (BW)</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditBodyweight(false)}
+                    className="text-xs px-3 py-1 rounded bg-white/5 text-gray-300 hover:bg-white/10"
+                  >
+                    Quitar BW
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={editTargetWeight}
+                    onChange={(event) => setEditTargetWeight(event.target.value)}
+                    className="flex-1 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#d6ff43]/60"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextUnit: WeightUnit = editUnit === 'kg' ? 'lb' : 'kg';
+                      const current = Number.parseFloat(editTargetWeight);
+                      if (Number.isFinite(current) && current > 0) {
+                        setEditTargetWeight(String(roundTo(convertWeight(current, editUnit, nextUnit), 1)));
+                      }
+                      setEditUnit(nextUnit);
+                    }}
+                    className="rounded-lg border px-3 py-1 text-center text-xs font-semibold uppercase tracking-[0.12em] transition-colors border-emerald-300/60 bg-emerald-400/20 text-emerald-200 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+                  >
+                    {editUnit}
+                  </button>
+                </div>
+              )}
+              {!editBodyweight && (
                 <button
                   type="button"
-                  onClick={() => {
-                    const nextUnit: WeightUnit = editUnit === 'kg' ? 'lb' : 'kg';
-                    const current = Number.parseFloat(editTargetWeight);
-                    if (Number.isFinite(current) && current > 0) {
-                      setEditTargetWeight(String(roundTo(convertWeight(current, editUnit, nextUnit), 1)));
-                    }
-                    setEditUnit(nextUnit);
-                  }}
-                  className="rounded-lg border px-3 py-1 text-center text-xs font-semibold uppercase tracking-[0.12em] transition-colors border-emerald-300/60 bg-emerald-400/20 text-emerald-200 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+                  onClick={() => setEditBodyweight(true)}
+                  className="text-xs px-3 py-1 rounded bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 transition-colors"
                 >
-                  {editUnit}
+                  Usar peso corporal
                 </button>
-              </div>
+              )}
             </div>
 
             {editError && (

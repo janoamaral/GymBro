@@ -41,6 +41,7 @@ model User {
   defaultBarbellLb      Decimal          @default(45)
   cycleIncrement531     Float            @default(5.0)
   restTimerSeconds      Int              @default(90)
+  setupTimeSeconds      Int              @default(15)
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
   workoutSessions       WorkoutSession[]
@@ -90,6 +91,8 @@ model ExerciseSet {
   targetWeight       Decimal
   barbellWeight      Decimal?
   perSideWeight      Decimal?
+  durationSeconds    Int?           // ponytail: hold time when reps don't apply (Dead Hang)
+  distanceMeters     Decimal?       // ponytail: carry distance when reps don't apply (Farmer's Carry)
   e1rm               Decimal?
   amrapStatus        String?
   amrapLoggedAt      DateTime?

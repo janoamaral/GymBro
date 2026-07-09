@@ -11,6 +11,7 @@ const ALLOWED_PLATES_KG = new Set<number>(DEFAULT_AVAILABLE_PLATES_KG);
 const updateSettingsSchema = z.object({
   cycleIncrement531: z.number().positive().optional(),
   restTimerSeconds: z.number().int().min(10).max(600).optional(),
+  setupTimeSeconds: z.number().int().min(1).max(300).optional(),
   displayName: z.string().trim().max(80).optional(),
   avatarUrl: z.string().trim().max(500).optional(),
   defaultUnit: z.enum(["kg", "lb"]).optional(),
@@ -125,6 +126,7 @@ export async function GET() {
     const settings = {
       cycleIncrement531: user.cycleIncrement531,
       restTimerSeconds: user.restTimerSeconds,
+      setupTimeSeconds: user.setupTimeSeconds,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
       defaultUnit: user.defaultUnit,
@@ -170,6 +172,7 @@ export async function PUT(request: Request) {
       data: {
         cycleIncrement531: payload.cycleIncrement531,
         restTimerSeconds: payload.restTimerSeconds,
+        setupTimeSeconds: payload.setupTimeSeconds,
         displayName: nextDisplayName,
         avatarUrl: nextAvatarUrl,
         defaultUnit: payload.defaultUnit,
@@ -204,6 +207,7 @@ export async function PUT(request: Request) {
     const settings = {
       cycleIncrement531: updated.cycleIncrement531,
       restTimerSeconds: updated.restTimerSeconds,
+      setupTimeSeconds: updated.setupTimeSeconds,
       displayName: updated.displayName,
       avatarUrl: updated.avatarUrl,
       defaultUnit: updated.defaultUnit,
