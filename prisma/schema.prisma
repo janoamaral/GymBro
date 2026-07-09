@@ -41,6 +41,7 @@ model User {
   defaultBarbellLb      Decimal          @default(45)
   cycleIncrement531     Float            @default(5.0)
   restTimerSeconds      Int              @default(90)
+  setupTimeSeconds      Int              @default(15)
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
   workoutSessions       WorkoutSession[]

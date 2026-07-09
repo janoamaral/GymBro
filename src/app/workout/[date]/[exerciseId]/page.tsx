@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Calculator, Dumbbell, Pencil, Timer } from 'lucide-react';
 import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
 import { RestTimerModal } from '@/components/rest-timer-modal';
+import { HangTimerModal } from '@/components/hang-timer-modal';
 import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
@@ -91,7 +92,9 @@ export default function ExerciseDetailPage() {
   const [savingSetIds, setSavingSetIds] = useState<Record<string, boolean>>({});
   const [showCalculator, setShowCalculator] = useState(false);
   const [restTimerSeconds, setRestTimerSeconds] = useState(90);
+  const [setupTimeSeconds, setSetupTimeSeconds] = useState(15);
   const [showRestTimer, setShowRestTimer] = useState(false);
+  const [hangTimerSetId, setHangTimerSetId] = useState<string | null>(null);
   const [calculatorWeight, setCalculatorWeight] = useState(0);
   const [calculatorUnit, setCalculatorUnit] = useState<'kg' | 'lb'>('kg');
   const [availablePlatesKg, setAvailablePlatesKg] = useState<number[]>([...KG_PLATE_OPTIONS]);
@@ -306,10 +309,15 @@ export default function ExerciseDetailPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchJsonWithInFlightDedup<{ settings?: { restTimerSeconds?: number } }>('/api/user/settings')
+    fetchJsonWithInFlightDedup<{ settings?: { restTimerSeconds?: number; setupTimeSeconds?: number } }>('/api/user/settings')
       .then((data) => {
-        if (!cancelled && data.settings?.restTimerSeconds) {
-          setRestTimerSeconds(data.settings.restTimerSeconds);
+        if (cancelled) return;
+        const settings = data.settings;
+        if (settings?.restTimerSeconds) {
+          setRestTimerSeconds(settings.restTimerSeconds);
+        }
+        if (settings?.setupTimeSeconds && settings.setupTimeSeconds > 0) {
+          setSetupTimeSeconds(settings.setupTimeSeconds);
         }
       })
       .catch(() => {
@@ -1050,16 +1058,35 @@ export default function ExerciseDetailPage() {
                     </span>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleDone(set.id)}
-                      title={`Marcar set ${set.setNumber} como ${set.isDone ? 'pendiente' : 'completado'}`}
-                      aria-label={`Marcar set ${set.setNumber} como ${set.isDone ? 'pendiente' : 'completado'}`}
-                      className={`set-status-pill ${isNext ? 'set-status-pill--next' : 'set-status-pill--base'} ${set.isDone ? 'set-status-pill--done' : 'set-status-pill--pending'}`}
-                    >
-                      <Dumbbell size={13} className="shrink-0" />
-                      <span>{set.isDone ? 'Completado' : 'Pendiente'}</span>
-                    </button>
+                    {(() => {
+                      const isTimeBased = inferMeasureFromSet(set) === 'time' && !set.isDone;
+                      if (isTimeBased) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setHangTimerSetId(set.id)}
+                            title={`Iniciar set ${set.setNumber}`}
+                            aria-label={`Iniciar set ${set.setNumber}`}
+                            className={`set-status-pill ${isNext ? 'set-status-pill--next' : 'set-status-pill--base'} set-status-pill--pending`}
+                          >
+                            <Timer size={13} className="shrink-0" />
+                            <span>Iniciar</span>
+                          </button>
+                        );
+                      }
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDone(set.id)}
+                          title={`Marcar set ${set.setNumber} como ${set.isDone ? 'pendiente' : 'completado'}`}
+                          aria-label={`Marcar set ${set.setNumber} como ${set.isDone ? 'pendiente' : 'completado'}`}
+                          className={`set-status-pill ${isNext ? 'set-status-pill--next' : 'set-status-pill--base'} ${set.isDone ? 'set-status-pill--done' : 'set-status-pill--pending'}`}
+                        >
+                          <Dumbbell size={13} className="shrink-0" />
+                          <span>{set.isDone ? 'Completado' : 'Pendiente'}</span>
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -1129,6 +1156,25 @@ export default function ExerciseDetailPage() {
         isOpen={showRestTimer}
         initialSeconds={restTimerSeconds}
         onClose={() => setShowRestTimer(false)}
+      />
+
+      <HangTimerModal
+        isOpen={hangTimerSetId !== null}
+        setupSeconds={setupTimeSeconds}
+        workoutSeconds={(() => {
+          const activeSet = sets.find((s) => s.id === hangTimerSetId);
+          return Number(activeSet?.durationSeconds ?? 0);
+        })()}
+        onComplete={() => {
+          const activeSetId = hangTimerSetId;
+          setHangTimerSetId(null);
+          if (activeSetId) {
+            const activeSet = sets.find((s) => s.id === activeSetId);
+            if (activeSet && !activeSet.isDone) {
+              handleToggleDone(activeSetId);
+            }
+          }
+        }}
       />
 
       <Modal isOpen={editingSet !== null} onClose={handleCloseSetEdit} title={editingSet ? `Editar serie ${editingSet.setNumber}` : 'Editar serie'}>

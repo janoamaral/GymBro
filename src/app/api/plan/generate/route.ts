@@ -45,7 +45,7 @@ const exerciseSchema = z.object({
   method: z.enum(["531", "none"]),
   oneRm: z.number().positive().optional(),
   sets: z.array(setSchema).min(1).optional(),
-  weight: z.number().positive().optional(),
+  weight: z.number().min(0).optional(),
   reps: z.number().int().positive().optional(),
   unit: z.enum(["kg", "lb"]),
 }).superRefine((exercise, context) => {
@@ -234,7 +234,7 @@ export async function POST(request: Request) {
     }
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "INVALID_PAYLOAD", issues: error.issues }, { status: 400 });
+      return NextResponse.json({ error: "INVALID_PAYLOAD", issues: error.issues, detail: error.message }, { status: 400 });
     }
 
     return NextResponse.json(

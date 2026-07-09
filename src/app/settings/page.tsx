@@ -26,6 +26,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const [cycleIncrement531, setCycleIncrement531] = useState(5);
   const [restTimerSeconds, setRestTimerSeconds] = useState(90);
+  const [setupTimeSeconds, setSetupTimeSeconds] = useState(15);
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [defaultUnit, setDefaultUnit] = useState<'kg' | 'lb'>('kg');
@@ -56,6 +57,7 @@ export default function SettingsPage() {
           fetchJsonWithInFlightDedup<{ settings?: {
             cycleIncrement531?: number;
             restTimerSeconds?: number;
+            setupTimeSeconds?: number;
             displayName?: string | null;
             avatarUrl?: string | null;
             defaultUnit?: 'kg' | 'lb';
@@ -76,6 +78,7 @@ export default function SettingsPage() {
         if (settingsData.settings) {
           setCycleIncrement531(settingsData.settings.cycleIncrement531 ?? 5);
           setRestTimerSeconds(settingsData.settings.restTimerSeconds ?? 90);
+          setSetupTimeSeconds(settingsData.settings.setupTimeSeconds ?? 15);
           setDisplayName(settingsData.settings.displayName ?? '');
           setAvatarUrl(settingsData.settings.avatarUrl ?? '');
           setDefaultUnit(settingsData.settings.defaultUnit === 'lb' ? 'lb' : 'kg');
@@ -158,6 +161,7 @@ export default function SettingsPage() {
           body: JSON.stringify({
             cycleIncrement531,
             restTimerSeconds,
+            setupTimeSeconds,
             displayName: displayName.trim(),
             avatarUrl: avatarUrl.trim(),
             defaultUnit,
@@ -454,6 +458,33 @@ export default function SettingsPage() {
               <span className="text-gray-500 text-xs">
                 ({Math.floor(restTimerSeconds / 60)}:{String(restTimerSeconds % 60).padStart(2, '0')})
               </span>
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="setup-time-seconds" className="block text-sm font-medium text-gray-300 mb-2">
+              Setup Time (series por tiempo)
+            </label>
+            <p className="text-xs text-gray-400 mb-3">
+              Countdown previo a series como Dead Hang, antes de arrancar el tiempo real.
+            </p>
+            <div className="flex gap-2 items-center">
+              <input
+                id="setup-time-seconds"
+                type="number"
+                step="1"
+                value={setupTimeSeconds}
+                onChange={(e) => {
+                  const value = Number.parseInt(e.target.value, 10);
+                  if (Number.isFinite(value)) {
+                    setSetupTimeSeconds(Math.min(300, Math.max(1, value)));
+                  }
+                }}
+                min="1"
+                max="300"
+                className="field-dark w-24"
+              />
+              <span className="text-gray-300">seg</span>
             </div>
           </div>
 
