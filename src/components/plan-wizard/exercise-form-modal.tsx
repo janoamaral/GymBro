@@ -4,8 +4,19 @@ import { useState } from 'react';
 import { Modal } from '@/components/ui/modal';
 
 export interface ExerciseSetInput {
-  reps: number;
+  reps?: number;
   weight: number;
+  durationSeconds?: number;
+  distanceMeters?: number;
+  bodyweight?: boolean;
+}
+
+export type SetMeasure = 'reps' | 'time' | 'distance';
+
+export function inferMeasureFromSet(set: { durationSeconds?: number | null; distanceMeters?: number | null }): SetMeasure {
+  if (set.durationSeconds != null && set.durationSeconds > 0) return 'time';
+  if (set.distanceMeters != null && Number(set.distanceMeters) > 0) return 'distance';
+  return 'reps';
 }
 
 export interface Exercise {
@@ -17,6 +28,9 @@ export interface Exercise {
   sets?: ExerciseSetInput[];
   weight?: number;
   reps?: number;
+  durationSeconds?: number;
+  distanceMeters?: number;
+  bodyweight?: boolean;
   unit?: 'kg' | 'lb';
 }
 
@@ -39,14 +53,24 @@ const PRESET_EXERCISES = [
 
 interface EditableSet {
   id: string;
+  measure: SetMeasure;
+  bodyweight: boolean;
   reps: string;
   weight: string;
+  duration: string;
+  distance: string;
 }
 
-const createEditableSet = (values?: Partial<Pick<EditableSet, 'reps' | 'weight'>>): EditableSet => ({
+const createEditableSet = (
+  values?: Partial<Pick<EditableSet, 'measure' | 'bodyweight' | 'reps' | 'weight' | 'duration' | 'distance'>>
+): EditableSet => ({
   id: globalThis.crypto.randomUUID(),
+  measure: values?.measure ?? 'reps',
+  bodyweight: values?.bodyweight ?? false,
   reps: values?.reps ?? '',
   weight: values?.weight ?? '',
+  duration: values?.duration ?? '',
+  distance: values?.distance ?? '',
 });
 
 export function ExerciseFormModal({
@@ -66,10 +90,13 @@ export function ExerciseFormModal({
   const [oneRm, setOneRm] = useState(initialExercise?.oneRm?.toString() || '');
   const [sets, setSets] = useState<EditableSet[]>(() => {
     if (initialExercise?.sets && initialExercise.sets.length > 0) {
-      return initialExercise.sets.map((set) => ({
-        id: globalThis.crypto.randomUUID(),
-        reps: set.reps.toString(),
+      return initialExercise.sets.map((set) => createEditableSet({
+        measure: inferMeasureFromSet(set),
+        bodyweight: set.bodyweight === true || set.weight === 0,
+        reps: set.reps?.toString() ?? '',
         weight: set.weight.toString(),
+        duration: set.durationSeconds != null ? set.durationSeconds.toString() : '',
+        distance: set.distanceMeters != null ? set.distanceMeters.toString() : '',
       }));
     }
 
@@ -87,7 +114,7 @@ export function ExerciseFormModal({
   const [bulkCount, setBulkCount] = useState('1');
   const [unit, setUnit] = useState<'kg' | 'lb'>(initialExercise?.unit || 'kg');
 
-  const updateSetField = (index: number, field: keyof EditableSet, value: string) => {
+  const updateSetField = (index: number, field: keyof EditableSet, value: string | boolean) => {
     setSets((currentSets) =>
       currentSets.map((set, setIndex) =>
         setIndex === index
@@ -114,6 +141,15 @@ export function ExerciseFormModal({
     });
   };
 
+  const editableSetFields = (set: EditableSet) => ({
+    measure: set.measure,
+    bodyweight: set.bodyweight,
+    reps: set.reps,
+    weight: set.weight,
+    duration: set.duration,
+    distance: set.distance,
+  });
+
   const cloneSet = (index: number) => {
     setSets((currentSets) => {
       const sourceSet = currentSets[index];
@@ -121,31 +157,35 @@ export function ExerciseFormModal({
         return currentSets;
       }
 
-      return [...currentSets, createEditableSet({ reps: sourceSet.reps, weight: sourceSet.weight })];
+      return [...currentSets, createEditableSet(editableSetFields(sourceSet))];
     });
+  };
+
+  const setMeasureComplete = (set: EditableSet): boolean => {
+    if (set.measure === 'reps') return Boolean(set.reps) && (set.bodyweight || Boolean(set.weight));
+    if (set.measure === 'time') return Boolean(set.duration) && (set.bodyweight || Boolean(set.weight));
+    if (set.measure === 'distance') return Boolean(set.distance) && (set.bodyweight || Boolean(set.weight));
+    return false;
   };
 
   const addIdenticalSetsFromLast = () => {
     const count = Number.parseInt(bulkCount, 10);
 
     if (Number.isNaN(count) || count <= 0) {
-      alert('Please enter a valid number of sets to add');
+      alert('Ingresá una cantidad válida de sets a duplicar');
       return;
     }
 
     const sourceSet = sets.at(-1);
-    if (!sourceSet) {
+    if (!sourceSet || !setMeasureComplete(sourceSet)) {
+      alert('Completá el último set antes de duplicar');
       return;
     }
 
-    if (!sourceSet.weight || !sourceSet.reps) {
-      alert('Complete reps and weight in the last set before bulk cloning');
-      return;
-    }
-
+    const rest = editableSetFields(sourceSet);
     setSets((currentSets) => [
       ...currentSets,
-      ...Array.from({ length: count }, () => createEditableSet({ reps: sourceSet.reps, weight: sourceSet.weight })),
+      ...Array.from({ length: count }, () => createEditableSet(rest)),
     ]);
   };
 
@@ -173,24 +213,42 @@ export function ExerciseFormModal({
     if (method === 'none') {
       try {
         parsedSets = sets.map((set, index) => {
-          const parsedWeight = Number.parseFloat(set.weight);
-          const parsedReps = Number.parseInt(set.reps, 10);
-
-          if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
-            throw new Error(`Set ${index + 1}: invalid weight`);
+          if (!setMeasureComplete(set)) {
+            throw new Error(`Set ${index + 1}: incompleto`);
           }
 
-          if (!Number.isInteger(parsedReps) || parsedReps <= 0) {
-            throw new Error(`Set ${index + 1}: invalid reps`);
+          const weight = set.bodyweight ? 0 : Number.parseFloat(set.weight);
+          if (!Number.isFinite(weight) || weight < 0) {
+            throw new Error(`Set ${index + 1}: peso inválido`);
           }
 
-          return {
-            weight: parsedWeight,
-            reps: parsedReps,
-          };
+          const input: ExerciseSetInput = { weight };
+          if (set.bodyweight) input.bodyweight = true;
+
+          if (set.measure === 'reps') {
+            const reps = Number.parseInt(set.reps, 10);
+            if (!Number.isInteger(reps) || reps <= 0) {
+              throw new Error(`Set ${index + 1}: reps inválidas`);
+            }
+            input.reps = reps;
+          } else if (set.measure === 'time') {
+            const durationSeconds = Number.parseInt(set.duration, 10);
+            if (!Number.isInteger(durationSeconds) || durationSeconds <= 0) {
+              throw new Error(`Set ${index + 1}: tiempo inválido`);
+            }
+            input.durationSeconds = durationSeconds;
+          } else {
+            const distanceMeters = Number.parseFloat(set.distance);
+            if (!Number.isFinite(distanceMeters) || distanceMeters <= 0) {
+              throw new Error(`Set ${index + 1}: distancia inválida`);
+            }
+            input.distanceMeters = distanceMeters;
+          }
+
+          return input;
         });
-      } catch {
-        alert('Please provide valid weight and reps for each set');
+      } catch (err) {
+        alert(err instanceof Error && err.message ? err.message : 'Revisá los sets antes de guardar');
         return;
       }
     }
@@ -198,6 +256,8 @@ export function ExerciseFormModal({
     if (method === 'none' && parsedSets.length === 0) {
       return;
     }
+
+    const firstReps = parsedSets[0]?.reps;
 
     const exercise: Exercise = {
       id: initialExercise?.id,
@@ -207,7 +267,10 @@ export function ExerciseFormModal({
       oneRm: method === '531' ? Number.parseFloat(oneRm) : undefined,
       sets: method === 'none' ? parsedSets : undefined,
       weight: method === 'none' ? parsedSets[0]?.weight : undefined,
-      reps: method === 'none' ? parsedSets[0]?.reps : undefined,
+      reps: method === 'none' ? firstReps : undefined,
+      durationSeconds: method === 'none' ? parsedSets[0]?.durationSeconds : undefined,
+      distanceMeters: method === 'none' ? parsedSets[0]?.distanceMeters : undefined,
+      bodyweight: method === 'none' ? parsedSets[0]?.bodyweight : undefined,
       unit,
     };
 
@@ -368,31 +431,107 @@ export function ExerciseFormModal({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label htmlFor={`set-weight-${set.id}`} className="block text-xs text-gray-400 mb-1">Peso</label>
-                        <input
-                          id={`set-weight-${set.id}`}
-                          type="number"
-                          step="0.5"
-                          value={set.weight}
-                          onChange={(e) => updateSetField(index, 'weight', e.target.value)}
-                          placeholder="Ej: 80"
-                          className="field-dark"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor={`set-reps-${set.id}`} className="block text-xs text-gray-400 mb-1">Reps</label>
-                        <input
-                          id={`set-reps-${set.id}`}
-                          type="number"
-                          value={set.reps}
-                          onChange={(e) => updateSetField(index, 'reps', e.target.value)}
-                          placeholder="Ej: 8"
-                          className="field-dark"
-                        />
+                    <div>
+                      <p className="block text-xs text-gray-400 mb-1">Medida</p>
+                      <div className="flex gap-1">
+                        {([
+                          { value: 'reps', label: 'Reps' },
+                          { value: 'time', label: 'Tiempo' },
+                          { value: 'distance', label: 'Distancia' },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => updateSetField(index, 'measure', opt.value)}
+                            className={`flex-1 py-1.5 rounded-lg text-xs transition-colors ${
+                              set.measure === opt.value ? 'btn-accent' : 'btn-dark'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {set.measure === 'reps' && (
+                        <div>
+                          <label htmlFor={`set-reps-${set.id}`} className="block text-xs text-gray-400 mb-1">Reps</label>
+                          <input
+                            id={`set-reps-${set.id}`}
+                            type="number"
+                            value={set.reps}
+                            onChange={(e) => updateSetField(index, 'reps', e.target.value)}
+                            placeholder="Ej: 8"
+                            className="field-dark"
+                          />
+                        </div>
+                      )}
+                      {set.measure === 'time' && (
+                        <div>
+                          <label htmlFor={`set-duration-${set.id}`} className="block text-xs text-gray-400 mb-1">Segundos</label>
+                          <input
+                            id={`set-duration-${set.id}`}
+                            type="number"
+                            value={set.duration}
+                            onChange={(e) => updateSetField(index, 'duration', e.target.value)}
+                            placeholder="Ej: 45"
+                            className="field-dark"
+                          />
+                        </div>
+                      )}
+                      {set.measure === 'distance' && (
+                        <div>
+                          <label htmlFor={`set-distance-${set.id}`} className="block text-xs text-gray-400 mb-1">M metros</label>
+                          <input
+                            id={`set-distance-${set.id}`}
+                            type="number"
+                            step="0.5"
+                            value={set.distance}
+                            onChange={(e) => updateSetField(index, 'distance', e.target.value)}
+                            placeholder="Ej: 30"
+                            className="field-dark"
+                          />
+                        </div>
+                      )}
+                      <div>
+                        <label htmlFor={`set-weight-${set.id}`} className="block text-xs text-gray-400 mb-1">
+                          {set.bodyweight ? 'Peso corporal' : 'Peso'}
+                        </label>
+                        {set.bodyweight ? (
+                          <div className="field-dark flex items-center justify-between px-3">
+                            <span className="text-sm text-gray-300">BW</span>
+                            <button
+                              type="button"
+                              onClick={() => updateSetField(index, 'bodyweight', false)}
+                              className="text-xs px-2 py-1 rounded bg-white/5 text-gray-300 hover:bg-white/10"
+                            >
+                              Quitar BW
+                            </button>
+                          </div>
+                        ) : (
+                          <input
+                            id={`set-weight-${set.id}`}
+                            type="number"
+                            step="0.5"
+                            value={set.weight}
+                            onChange={(e) => updateSetField(index, 'weight', e.target.value)}
+                            placeholder="Ej: 80"
+                            className="field-dark"
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    {!set.bodyweight && (
+                      <button
+                        type="button"
+                        onClick={() => updateSetField(index, 'bodyweight', true)}
+                        className="text-xs px-2 py-1 rounded bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 transition-colors"
+                      >
+                        Usar peso corporal
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

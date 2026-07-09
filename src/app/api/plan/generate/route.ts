@@ -21,8 +21,22 @@ function safePerSideWeight(targetWeight: number, unit: "kg" | "lb", barbellWeigh
 }
 
 const setSchema = z.object({
-  weight: z.number().positive(),
-  reps: z.number().int().positive(),
+  weight: z.number().min(0),
+  reps: z.number().int().min(1).max(1000).optional(),
+  durationSeconds: z.number().int().min(1).max(86400).optional(),
+  distanceMeters: z.number().min(0.1).max(100000).optional(),
+  bodyweight: z.boolean().optional(),
+}).superRefine((set, ctx) => {
+  const hasReps = set.reps !== undefined;
+  const hasTime = set.durationSeconds !== undefined;
+  const hasDist = set.distanceMeters !== undefined;
+  const measures = [hasReps, hasTime, hasDist].filter(Boolean).length;
+  if (measures === 0) {
+    ctx.addIssue({ code: 'custom', message: 'set needs reps, durationSeconds, or distanceMeters', path: [] });
+  }
+  if (measures > 1) {
+    ctx.addIssue({ code: 'custom', message: 'set can have only one of reps / durationSeconds / distanceMeters', path: [] });
+  }
 });
 
 const exerciseSchema = z.object({
@@ -182,7 +196,9 @@ export async function POST(request: Request) {
               : [];
 
           for (const [index, customSet] of setsToCreate.entries()) {
-            const perSideWeight = safePerSideWeight(customSet.weight, exercise.unit as "kg" | "lb");
+            const weight = customSet.bodyweight ? 0 : customSet.weight;
+            const perSideWeight = safePerSideWeight(weight, exercise.unit as "kg" | "lb");
+            const repsTarget = customSet.reps ?? 1;
 
             const set = await db.exerciseSet.create({
               data: {
@@ -190,10 +206,12 @@ export async function POST(request: Request) {
                 exerciseId: exerciseRecord.id,
                 exerciseOrder: exerciseIndex,
                 setNumber: index + 1,
-                repsTarget: customSet.reps,
-                targetWeight: customSet.weight,
+                repsTarget,
+                targetWeight: weight,
                 unit: exercise.unit as "kg" | "lb",
                 perSideWeight,
+                durationSeconds: customSet.durationSeconds,
+                distanceMeters: customSet.distanceMeters,
               },
             });
 
