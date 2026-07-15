@@ -992,7 +992,7 @@ export default function WorkoutDayPage() {
 
 
         {/* Lista de ejercicios tipo tarjetas */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 pb-24">
           {exercises.map((exerciseGroup, idx) => {
             const isNext = idx === nextExerciseIndex;
             const isSelected = transitioningExerciseId === exerciseGroup.exerciseId;
