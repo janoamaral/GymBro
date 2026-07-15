@@ -509,32 +509,36 @@ export default function WorkoutDayPage() {
       return;
     }
 
-    const setsPayload = exercise.sets.map((set) => {
-      const targetWeight = set.bodyweight ? 0 : Number(set.weight);
-      const entry: { repsTarget?: number; targetWeight: number; durationSeconds?: number; distanceMeters?: number; bodyweight?: boolean } = { targetWeight };
+    const firstSet = exercise.sets[0];
+    const measure =
+      firstSet.durationSeconds != null && firstSet.durationSeconds > 0
+        ? 'time'
+        : firstSet.distanceMeters != null && Number(firstSet.distanceMeters) > 0
+          ? 'distance'
+          : 'reps';
 
-      if (set.bodyweight) {
-        entry.bodyweight = true;
-      }
-
-      if (set.durationSeconds != null && set.durationSeconds > 0) {
-        entry.durationSeconds = Number(set.durationSeconds);
-      } else if (set.distanceMeters != null && Number(set.distanceMeters) > 0) {
-        entry.distanceMeters = Number(set.distanceMeters);
-      } else {
-        entry.repsTarget = Number(set.reps ?? 1);
-      }
-
-      return entry;
-    });
-
-    const payload: { exerciseName?: string; unit: 'kg' | 'lb'; sets: typeof setsPayload } = {
+    const targetWeight = firstSet.bodyweight ? 0 : Number(firstSet.weight);
+    const payload: {
+      exerciseName?: string;
+      repsTarget?: number;
+      targetWeight: number;
+      unit: 'kg' | 'lb';
+      durationSeconds?: number;
+      distanceMeters?: number;
+    } = {
+      targetWeight,
       unit: exercise.unit ?? 'kg',
-      sets: setsPayload,
     };
 
     if (exercise.name) {
       payload.exerciseName = exercise.name;
+    }
+    if (measure === 'reps') {
+      payload.repsTarget = Number(firstSet.reps ?? 1);
+    } else if (measure === 'time') {
+      payload.durationSeconds = Number(firstSet.durationSeconds);
+    } else if (measure === 'distance') {
+      payload.distanceMeters = Number(firstSet.distanceMeters);
     }
 
     setAddExerciseError('');
@@ -557,23 +561,23 @@ export default function WorkoutDayPage() {
       }
 
       const data = (await response.json()) as {
-        sets: Array<Set & { durationSeconds?: number | null; distanceMeters?: number | null }>;
+        set: Set & { exercise: { id: string; name: string } };
       };
 
-      const incomingSets: Set[] = data.sets.map((s) => ({
-        id: s.id,
-        exerciseOrder: s.exerciseOrder,
-        setNumber: s.setNumber,
-        repsTarget: s.repsTarget,
-        targetWeight: Number(s.targetWeight),
-        unit: s.unit,
-        isDone: s.isDone,
-        exercise: s.exercise,
-      }));
+      const incomingSet: Set = {
+        id: data.set.id,
+        exerciseOrder: data.set.exerciseOrder,
+        setNumber: data.set.setNumber,
+        repsTarget: data.set.repsTarget,
+        targetWeight: Number(data.set.targetWeight),
+        unit: data.set.unit,
+        isDone: data.set.isDone,
+        exercise: data.set.exercise,
+      };
 
       const nextSessions = sessions.length > 0
         ? sessions.map((session, index) =>
-            index === 0 ? { ...session, sets: [...session.sets, ...incomingSets] } : session,
+            index === 0 ? { ...session, sets: [...session.sets, incomingSet] } : session,
           )
         : [
             {
@@ -581,7 +585,7 @@ export default function WorkoutDayPage() {
               title: `Workout ${date}`,
               startedAt: date,
               reschedule: null,
-              sets: incomingSets,
+              sets: [incomingSet],
             },
           ];
 
@@ -591,22 +595,22 @@ export default function WorkoutDayPage() {
       setShowAddExerciseModal(false);
     } catch (err) {
       if (!navigator.onLine || err instanceof TypeError) {
-        const tempExerciseId = `temp-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
-        const baseOrder = exercises.length > 0 ? Math.max(...exercises.map((e) => e.exerciseOrder)) + 1 : 0;
-
-        const provisional: Set[] = setsPayload.map((set, index) => ({
-          id: `temp-${globalThis.crypto?.randomUUID?.() ?? Date.now() + index}`,
-          exerciseOrder: baseOrder,
-          setNumber: index + 1,
-          repsTarget: set.repsTarget ?? 1,
-          targetWeight: set.targetWeight,
+        // Offline: sintetizo set temporal y encolo. El próximo fetch reconciliará.
+        const tempSetId = `temp-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
+        const tempExerciseId = `temp-${globalThis.crypto?.randomUUID?.() ?? Date.now() + 1}`;
+        const provisional: Set = {
+          id: tempSetId,
+          exerciseOrder: exercises.length > 0 ? Math.max(...exercises.map((e) => e.exerciseOrder)) + 1 : 0,
+          setNumber: 1,
+          repsTarget: payload.repsTarget ?? 1,
+          targetWeight,
           unit: payload.unit,
           exercise: { id: tempExerciseId, name: exercise.name },
-        }));
+        };
 
         const nextSessions = sessions.length > 0
           ? sessions.map((session, index) =>
-              index === 0 ? { ...session, sets: [...session.sets, ...provisional] } : session,
+              index === 0 ? { ...session, sets: [...session.sets, provisional] } : session,
             )
           : [
               {
@@ -614,18 +618,14 @@ export default function WorkoutDayPage() {
                 title: `Workout ${date}`,
                 startedAt: date,
                 reschedule: null,
-                sets: provisional,
+                sets: [provisional],
               },
             ];
 
         setSessions(nextSessions);
         setExercises(groupSetsByExercise(nextSessions));
         void cacheWorkoutDay(date, nextSessions);
-        await enqueueAddExerciseMutation(date, {
-          exerciseName: payload.exerciseName,
-          unit: payload.unit,
-          sets: setsPayload,
-        } as Parameters<typeof enqueueAddExerciseMutation>[1]);
+        await enqueueAddExerciseMutation(date, payload as Parameters<typeof enqueueAddExerciseMutation>[1]);
         setSyncError('Guardado offline. Se sincronizará cuando vuelva internet.');
         setShowAddExerciseModal(false);
       } else {
