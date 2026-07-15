@@ -31,34 +31,27 @@ function isExerciseOrderUnsupported(error: unknown): boolean {
   return /Unknown argument `exerciseOrder`/i.test(error.message);
 }
 
+const setInputSchema = z.object({
+  repsTarget: z.number().int().min(1).max(1000).optional(),
+  targetWeight: z.number().min(0),
+  durationSeconds: z.number().int().min(1).max(86400).optional(),
+  distanceMeters: z.number().min(0.1).max(100000).optional(),
+  bodyweight: z.boolean().optional(),
+});
+
 const createExerciseSchema = z
   .object({
     exerciseId: z.string().min(1).optional(),
     exerciseName: z.string().min(1).max(120).optional(),
-    repsTarget: z.number().int().min(1).max(1000).optional(),
-    targetWeight: z.number().min(0),
     unit: z.enum(["kg", "lb"]),
     liftId: z.enum(["SQ", "DL", "BP"]).optional(),
-    durationSeconds: z.number().int().min(1).max(86400).optional(),
-    distanceMeters: z.number().min(0.1).max(100000).optional(),
+    sets: z.array(setInputSchema).min(1),
   })
   .superRefine((value, ctx) => {
     if (!value.exerciseId && !value.exerciseName) {
       ctx.addIssue({
         code: "custom",
         message: "exerciseId or exerciseName is required",
-        path: [],
-      });
-    }
-
-    const measures = [value.repsTarget, value.durationSeconds, value.distanceMeters].filter(
-      (m) => m !== undefined,
-    ).length;
-
-    if (measures > 1) {
-      ctx.addIssue({
-        code: "custom",
-        message: "only one of repsTarget / durationSeconds / distanceMeters is allowed",
         path: [],
       });
     }
@@ -147,24 +140,28 @@ export async function POST(
       exerciseOrder = 0;
     }
 
-    const existingSetsCount = await db.exerciseSet.count({ where: { sessionId: session.id } });
-    const repsTarget = payload.repsTarget ?? 1;
-    const targetWeight = payload.targetWeight;
+const existingSetsCount = await db.exerciseSet.count({ where: { sessionId: session.id } });
 
-    let createdSet;
+  const createdSets: Array<{ id: string; exerciseOrder: number; setNumber: number; repsTarget: number; targetWeight: number; unit: string; isDone: boolean; exercise: { id: string; name: string }; durationSeconds?: number | null; distanceMeters?: number | null }> = [];
+
+  for (const [index, setInput] of payload.sets.entries()) {
+    const repsTarget = setInput.repsTarget ?? 1;
+    const targetWeight = setInput.bodyweight ? 0 : setInput.targetWeight;
+
+    let created;
     try {
-      createdSet = await db.exerciseSet.create({
+      created = await db.exerciseSet.create({
         data: {
           sessionId: session.id,
           exerciseId,
           exerciseOrder,
           liftId: payload.liftId,
-          setNumber: existingSetsCount + 1,
+          setNumber: existingSetsCount + index + 1,
           repsTarget,
           targetWeight,
           unit: payload.unit,
-          durationSeconds: payload.durationSeconds,
-          distanceMeters: payload.distanceMeters,
+          durationSeconds: setInput.durationSeconds,
+          distanceMeters: setInput.distanceMeters,
         },
         include: { exercise: true },
       });
@@ -173,23 +170,37 @@ export async function POST(
         throw error;
       }
 
-      createdSet = await db.exerciseSet.create({
+      created = await db.exerciseSet.create({
         data: {
           sessionId: session.id,
           exerciseId,
           liftId: payload.liftId,
-          setNumber: existingSetsCount + 1,
+          setNumber: existingSetsCount + index + 1,
           repsTarget,
           targetWeight,
           unit: payload.unit,
-          durationSeconds: payload.durationSeconds,
-          distanceMeters: payload.distanceMeters,
+          durationSeconds: setInput.durationSeconds,
+          distanceMeters: setInput.distanceMeters,
         },
         include: { exercise: true },
       });
     }
 
-    return NextResponse.json({ set: createdSet, exercise: createdSet.exercise }, { status: 201 });
+    createdSets.push({
+      id: created.id,
+      exerciseOrder: created.exerciseOrder,
+      setNumber: created.setNumber,
+      repsTarget: created.repsTarget,
+      targetWeight: Number(created.targetWeight),
+      unit: created.unit,
+      isDone: created.isDone,
+      exercise: { id: created.exercise.id, name: created.exercise.name },
+      durationSeconds: created.durationSeconds != null ? Number(created.durationSeconds) : null,
+      distanceMeters: created.distanceMeters != null ? Number(created.distanceMeters) : null,
+    });
+  }
+
+  return NextResponse.json({ sets: createdSets, exercise: createdSets[0]?.exercise }, { status: 201 });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
