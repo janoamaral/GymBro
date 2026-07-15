@@ -2,14 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type TouchEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarDays, GripVertical, Trash2 } from 'lucide-react';
+import { ArrowLeft, CalendarDays, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Modal } from '@/components/ui/modal';
 import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
+import { ExerciseFormModal, type Exercise as PlanExercise } from '@/components/plan-wizard/exercise-form-modal';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 import {
   cacheWorkoutDay,
   clearCachedWorkoutDay,
+  enqueueAddExerciseMutation,
+  enqueueDeleteExerciseMutation,
   enqueueDeleteWorkoutMutation,
   enqueueReorderMutation,
   enqueueRescheduleMutation,
@@ -172,6 +175,13 @@ export default function WorkoutDayPage() {
   const [error, setError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
+  const [deletingExerciseId, setDeletingExerciseId] = useState<string | null>(null);
+  const [showDeleteExerciseConfirm, setShowDeleteExerciseConfirm] = useState(false);
+  const [deletingExercise, setDeletingExercise] = useState(false);
+  const [syncError, setSyncError] = useState('');
+  const [addExerciseError, setAddExerciseError] = useState('');
+  const [addingExercise, setAddingExercise] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState(() => {
     const [year, month, day] = date.split('-').map(Number);
@@ -293,6 +303,20 @@ export default function WorkoutDayPage() {
 
     return () => clearTimeout(timeout);
   }, [transitioning, targetRoute, router]);
+
+  useEffect(() => {
+    if (!syncError) {
+      return;
+    }
+
+    const timeoutId = globalThis.window.setTimeout(() => {
+      setSyncError('');
+    }, 2400);
+
+    return () => {
+      globalThis.window.clearTimeout(timeoutId);
+    };
+  }, [syncError]);
 
   const clearCompletedExerciseAnimation = useCallback((exerciseId: string) => {
     setRecentlyCompletedExerciseIds((previous) => {
@@ -477,6 +501,193 @@ export default function WorkoutDayPage() {
     } finally {
       setRescheduling(false);
       setShowRescheduleModal(false);
+    }
+  };
+
+  const handleAddExercise = async (exercise: PlanExercise) => {
+    if (!exercise.sets || exercise.sets.length === 0) {
+      return;
+    }
+
+    const firstSet = exercise.sets[0];
+    const measure =
+      firstSet.durationSeconds != null && firstSet.durationSeconds > 0
+        ? 'time'
+        : firstSet.distanceMeters != null && Number(firstSet.distanceMeters) > 0
+          ? 'distance'
+          : 'reps';
+
+    const targetWeight = firstSet.bodyweight ? 0 : Number(firstSet.weight);
+    const payload: {
+      exerciseName?: string;
+      repsTarget?: number;
+      targetWeight: number;
+      unit: 'kg' | 'lb';
+      durationSeconds?: number;
+      distanceMeters?: number;
+    } = {
+      targetWeight,
+      unit: exercise.unit ?? 'kg',
+    };
+
+    if (exercise.name) {
+      payload.exerciseName = exercise.name;
+    }
+    if (measure === 'reps') {
+      payload.repsTarget = Number(firstSet.reps ?? 1);
+    } else if (measure === 'time') {
+      payload.durationSeconds = Number(firstSet.durationSeconds);
+    } else if (measure === 'distance') {
+      payload.distanceMeters = Number(firstSet.distanceMeters);
+    }
+
+    setAddExerciseError('');
+    setAddingExercise(true);
+
+    try {
+      const response = await fetch(`/api/workouts/by-date/${date}/exercises`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        if (response.status === 429 || response.status >= 500) {
+          throw new TypeError('retryable');
+        }
+
+        const data = (await response.json().catch(() => null)) as { error?: string; detail?: string } | null;
+        throw new Error(data?.detail ?? data?.error ?? 'No se pudo agregar el ejercicio');
+      }
+
+      const data = (await response.json()) as {
+        set: Set & { exercise: { id: string; name: string } };
+      };
+
+      const incomingSet: Set = {
+        id: data.set.id,
+        exerciseOrder: data.set.exerciseOrder,
+        setNumber: data.set.setNumber,
+        repsTarget: data.set.repsTarget,
+        targetWeight: Number(data.set.targetWeight),
+        unit: data.set.unit,
+        isDone: data.set.isDone,
+        exercise: data.set.exercise,
+      };
+
+      const nextSessions = sessions.length > 0
+        ? sessions.map((session, index) =>
+            index === 0 ? { ...session, sets: [...session.sets, incomingSet] } : session,
+          )
+        : [
+            {
+              id: 'temp-session-' + date,
+              title: `Workout ${date}`,
+              startedAt: date,
+              reschedule: null,
+              sets: [incomingSet],
+            },
+          ];
+
+      setSessions(nextSessions);
+      setExercises(groupSetsByExercise(nextSessions));
+      void cacheWorkoutDay(date, nextSessions);
+      setShowAddExerciseModal(false);
+    } catch (err) {
+      if (!navigator.onLine || err instanceof TypeError) {
+        // Offline: sintetizo set temporal y encolo. El próximo fetch reconciliará.
+        const tempSetId = `temp-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
+        const tempExerciseId = `temp-${globalThis.crypto?.randomUUID?.() ?? Date.now() + 1}`;
+        const provisional: Set = {
+          id: tempSetId,
+          exerciseOrder: exercises.length > 0 ? Math.max(...exercises.map((e) => e.exerciseOrder)) + 1 : 0,
+          setNumber: 1,
+          repsTarget: payload.repsTarget ?? 1,
+          targetWeight,
+          unit: payload.unit,
+          exercise: { id: tempExerciseId, name: exercise.name },
+        };
+
+        const nextSessions = sessions.length > 0
+          ? sessions.map((session, index) =>
+              index === 0 ? { ...session, sets: [...session.sets, provisional] } : session,
+            )
+          : [
+              {
+                id: 'temp-session-' + date,
+                title: `Workout ${date}`,
+                startedAt: date,
+                reschedule: null,
+                sets: [provisional],
+              },
+            ];
+
+        setSessions(nextSessions);
+        setExercises(groupSetsByExercise(nextSessions));
+        void cacheWorkoutDay(date, nextSessions);
+        await enqueueAddExerciseMutation(date, payload as Parameters<typeof enqueueAddExerciseMutation>[1]);
+        setSyncError('Guardado offline. Se sincronizará cuando vuelva internet.');
+        setShowAddExerciseModal(false);
+      } else {
+        setAddExerciseError(err instanceof Error ? err.message : 'No se pudo agregar el ejercicio');
+      }
+    } finally {
+      setAddingExercise(false);
+    }
+  };
+
+  const handleDeleteExercise = async () => {
+    const exerciseId = deletingExerciseId;
+    if (!exerciseId) {
+      setShowDeleteExerciseConfirm(false);
+      return;
+    }
+
+    setDeletingExercise(true);
+    setSyncError('');
+
+    try {
+      const response = await fetch(
+        `/api/workouts/by-date/${date}/exercises?exerciseId=${encodeURIComponent(exerciseId)}`,
+        { method: 'DELETE' },
+      );
+
+      if (!response.ok) {
+        if (response.status === 429 || response.status >= 500) {
+          throw new TypeError('retryable');
+        }
+
+        const data = (await response.json().catch(() => null)) as { error?: string; detail?: string } | null;
+        throw new Error(data?.detail ?? data?.error ?? 'No se pudo eliminar el ejercicio');
+      }
+
+      const nextSessions = sessions.map((session) => ({
+        ...session,
+        sets: session.sets.filter((set) => set.exercise.id !== exerciseId),
+      }));
+      setSessions(nextSessions);
+      setExercises(groupSetsByExercise(nextSessions));
+      void cacheWorkoutDay(date, nextSessions);
+      setShowDeleteExerciseConfirm(false);
+      setDeletingExerciseId(null);
+    } catch (err) {
+      if (!navigator.onLine || err instanceof TypeError) {
+        const nextSessions = sessions.map((session) => ({
+          ...session,
+          sets: session.sets.filter((set) => set.exercise.id !== exerciseId),
+        }));
+        setSessions(nextSessions);
+        setExercises(groupSetsByExercise(nextSessions));
+        void cacheWorkoutDay(date, nextSessions);
+        await enqueueDeleteExerciseMutation(date, exerciseId);
+        setSyncError('Guardado offline. Se sincronizará cuando vuelva internet.');
+        setShowDeleteExerciseConfirm(false);
+        setDeletingExerciseId(null);
+      } else {
+        setSyncError(err instanceof Error ? err.message : 'No se pudo eliminar el ejercicio');
+      }
+    } finally {
+      setDeletingExercise(false);
     }
   };
 
@@ -814,7 +1025,7 @@ export default function WorkoutDayPage() {
                   handleDropExercise(exerciseGroup.exerciseId);
                 }}
                 onClick={(event) => handleExerciseOpen(event, exerciseGroup)}
-                className={`${baseCardClass} ${selectedCardClass} cursor-pointer pr-12 pb-12 ${isDragTargetCard ? 'ring-2 ring-sky-300/70 drag-card--target' : ''} ${isDraggingThisCard ? 'opacity-85 drag-card--active transition-none' : ''}`}
+                className={`${baseCardClass} ${selectedCardClass} cursor-pointer pr-12 pb-12 pl-12 ${isDragTargetCard ? 'ring-2 ring-sky-300/70 drag-card--target' : ''} ${isDraggingThisCard ? 'opacity-85 drag-card--active transition-none' : ''}`}
                 style={
                   isDraggingThisCard
                     ? { transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)` }
@@ -881,6 +1092,20 @@ export default function WorkoutDayPage() {
                     />
                   )}
                 </span>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setDeletingExerciseId(exerciseGroup.exerciseId);
+                    setShowDeleteExerciseConfirm(true);
+                  }}
+                  disabled={deletingExercise}
+                  aria-label={`Eliminar ${exerciseGroup.exerciseName}`}
+                  title={`Eliminar ${exerciseGroup.exerciseName}`}
+                  className={`absolute left-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 shadow-sm backdrop-blur-sm transition-colors hover:text-red-300 disabled:opacity-50 ${isNext ? 'text-[#101010]/70' : 'text-gray-500'}`}
+                >
+                  <Trash2 size={18} className="pointer-events-none" />
+                </button>
               </button>
             );
           })}
@@ -895,6 +1120,26 @@ export default function WorkoutDayPage() {
             </p>
           </div>
         )}
+
+        <button
+          type="button"
+          onClick={() => {
+            setAddExerciseError('');
+            setShowAddExerciseModal(true);
+          }}
+          disabled={addingExercise}
+          className="add-exercise-fab"
+          aria-label="Agregar ejercicio a este día"
+          title="Agregar ejercicio a este día"
+        >
+          <Plus size={26} />
+        </button>
+
+        {syncError && (
+          <div className="mt-4 rounded-lg border border-amber-300/50 bg-amber-300/15 px-3 py-2 text-xs font-semibold text-amber-100">
+            {syncError}
+          </div>
+        )}
       </div>
 
       <ConfirmDialog
@@ -907,6 +1152,36 @@ export default function WorkoutDayPage() {
         cancelText="Cancelar"
         isDanger
       />
+
+      <ConfirmDialog
+        isOpen={showDeleteExerciseConfirm}
+        title="Eliminar ejercicio"
+        message="Esta acción eliminará todas las series de este ejercicio en el día. ¿Deseas continuar?"
+        onConfirm={handleDeleteExercise}
+        onCancel={() => {
+          setShowDeleteExerciseConfirm(false);
+          setDeletingExerciseId(null);
+        }}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        isDanger
+      />
+
+      <ExerciseFormModal
+        isOpen={showAddExerciseModal}
+        onClose={() => {
+          setShowAddExerciseModal(false);
+          setAddExerciseError('');
+        }}
+        onSave={handleAddExercise}
+        accessoryOnly
+      />
+
+      {addExerciseError && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 rounded-lg border border-red-400/40 bg-red-500/20 px-4 py-2 text-xs font-semibold text-red-100 shadow-lg">
+          {addExerciseError}
+        </div>
+      )}
 
       <Modal
         isOpen={showRescheduleModal}
@@ -981,6 +1256,35 @@ export default function WorkoutDayPage() {
 
         .drag-card--target {
           animation: drag-card-target 520ms ease-in-out infinite;
+        }
+
+        .add-exercise-fab {
+          position: fixed;
+          right: max(1rem, env(safe-area-inset-right));
+          bottom: max(1rem, env(safe-area-inset-bottom));
+          width: 3.75rem;
+          height: 3.75rem;
+          border-radius: 9999px;
+          border: none;
+          background: #d6ff43;
+          color: #0b0b0b;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 16px 36px rgba(214, 255, 67, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.08);
+          z-index: 60;
+          transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+        }
+        .add-exercise-fab:active {
+          transform: scale(0.96);
+          box-shadow: 0 10px 24px rgba(214, 255, 67, 0.18);
+        }
+        .add-exercise-fab svg {
+          transform: translateY(-2px);
+        }
+        .add-exercise-fab:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
         }
 
         .set-card-title--done {

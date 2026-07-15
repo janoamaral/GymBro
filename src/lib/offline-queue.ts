@@ -6,7 +6,26 @@ const RESOURCE_CACHE_STORE = "resourceCache";
 
 const SYNC_EVENT_NAME = "gymbro:offline-sync";
 
-type QueueMutationType = "set_update" | "reorder_exercises" | "reschedule_workout" | "delete_workout";
+type QueueMutationType =
+  | "set_update"
+  | "reorder_exercises"
+  | "reschedule_workout"
+  | "delete_workout"
+  | "add_exercise_to_day"
+  | "delete_exercise_from_day";
+
+type AddExercisePayload = {
+  exerciseId?: string;
+  exerciseName?: string;
+  repsTarget?: number;
+  targetWeight: number;
+  unit: "kg" | "lb";
+  liftId?: "SQ" | "DL" | "BP";
+  durationSeconds?: number;
+  distanceMeters?: number;
+};
+
+type DeleteExercisePayload = Record<string, never>;
 
 type SetUpdatePayload = {
   setFeelingScore?: number | null;
@@ -23,6 +42,8 @@ type QueueMutationPayload =
   | SetUpdatePayload
   | { orderedExerciseIds: string[] }
   | { rescheduledToLocalDate: string; rescheduleReason: string | null }
+  | AddExercisePayload
+  | DeleteExercisePayload
   | Record<string, never>;
 
 export type QueueMutation = {
@@ -30,7 +51,7 @@ export type QueueMutation = {
   type: QueueMutationType;
   targetId: string;
   endpoint: string;
-  method: "PATCH" | "DELETE";
+  method: "PATCH" | "DELETE" | "POST";
   payload: QueueMutationPayload;
   createdAt: number;
   updatedAt: number;
@@ -324,6 +345,70 @@ export async function enqueueDeleteWorkoutMutation(sessionId: string): Promise<v
   dispatchSyncEvent("idle", await getOfflineQueuePendingCount());
 }
 
+export async function enqueueAddExerciseMutation(date: string, payload: AddExercisePayload): Promise<void> {
+  if (!canUseIndexedDb()) {
+    return;
+  }
+
+  const queue = await getAllQueueMutations();
+  // Idempotency por name+date; si ya hay una add pendiente para el mismo nombre, se reemplaza.
+  const key = mutationKey("add_exercise_to_day", `${date}:${payload.exerciseName ?? payload.exerciseId ?? ""}`);
+  const existing = queue.find((item) => mutationKey(item.type, item.targetId) === key);
+  const now = Date.now();
+
+  const next: QueueMutation = existing
+    ? {
+        ...existing,
+        payload,
+        updatedAt: now,
+      }
+    : {
+        id: nextMutationId(),
+        type: "add_exercise_to_day",
+        targetId: `${date}:${payload.exerciseName ?? payload.exerciseId ?? ""}`,
+        endpoint: `/api/workouts/by-date/${date}/exercises`,
+        method: "POST",
+        payload,
+        createdAt: now,
+        updatedAt: now,
+        attempts: 0,
+      };
+
+  await putQueueMutation(next);
+  dispatchSyncEvent("idle", await getOfflineQueuePendingCount());
+}
+
+export async function enqueueDeleteExerciseMutation(date: string, exerciseId: string): Promise<void> {
+  if (!canUseIndexedDb()) {
+    return;
+  }
+
+  const queue = await getAllQueueMutations();
+  const key = mutationKey("delete_exercise_from_day", `${date}:${exerciseId}`);
+  const existing = queue.find((item) => mutationKey(item.type, item.targetId) === key);
+  const now = Date.now();
+
+  const next: QueueMutation = existing
+    ? {
+        ...existing,
+        updatedAt: now,
+      }
+    : {
+        id: nextMutationId(),
+        type: "delete_exercise_from_day",
+        targetId: `${date}:${exerciseId}`,
+        endpoint: `/api/workouts/by-date/${date}/exercises?exerciseId=${encodeURIComponent(exerciseId)}`,
+        method: "DELETE",
+        payload: {},
+        createdAt: now,
+        updatedAt: now,
+        attempts: 0,
+      };
+
+  await putQueueMutation(next);
+  dispatchSyncEvent("idle", await getOfflineQueuePendingCount());
+}
+
 export async function acknowledgeSetMutationFields(
   setId: string,
   keys: Array<keyof SetUpdatePayload>,
@@ -393,8 +478,8 @@ export async function flushOfflineMutationQueue(): Promise<void> {
       try {
         const response = await fetch(mutation.endpoint, {
           method: mutation.method,
-          headers: mutation.method === "PATCH" ? { "Content-Type": "application/json" } : undefined,
-          body: mutation.method === "PATCH" ? JSON.stringify(mutation.payload) : undefined,
+          headers: mutation.method === "DELETE" ? undefined : { "Content-Type": "application/json" },
+          body: mutation.method === "DELETE" ? undefined : JSON.stringify(mutation.payload),
         });
 
         if (response.ok || response.status === 404) {
@@ -616,8 +701,8 @@ export async function hasPendingMutationsForDay(
     if (mutation.type === 'set_update') {
       return setIdSet.has(mutation.targetId);
     }
-    if (mutation.type === 'reorder_exercises') {
-      return mutation.targetId === date;
+    if (mutation.type === 'reorder_exercises' || mutation.type === 'add_exercise_to_day' || mutation.type === 'delete_exercise_from_day') {
+      return mutation.targetId.startsWith(`${date}:`) || mutation.targetId === date;
     }
     return sessionIdSet.has(mutation.targetId);
   });
