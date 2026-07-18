@@ -343,7 +343,7 @@ export default function PesoPage() {
           <div className="relative">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl font-bold normal-case not-italic">Chart</h2>
+                <h2 className="text-xl font-bold">Chart</h2>
                 <p className="mt-1 text-xs text-gray-400">Evolución de peso corporal</p>
               </div>
             </div>
@@ -378,13 +378,13 @@ export default function PesoPage() {
             <div className="mt-4 flex items-end justify-between gap-4 border-t border-white/10 pt-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.22em] text-gray-400">Peso actual</p>
-                <p className="text-4xl font-semibold leading-none normal-case not-italic">
+                <p className="text-4xl font-semibold leading-none">
                   {lastPoint ? lastPoint.weight.toFixed(1) : '--'}
                   <span className="ml-1 text-base text-gray-300">{normalizedPoints.unit}</span>
                 </p>
               </div>
 
-              <div className={`text-right text-3xl font-semibold normal-case not-italic ${trend >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+              <div className={`text-right text-3xl font-semibold ${trend >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                 <p>{trend >= 0 ? '↗' : '↘'} {trendLabel}</p>
                 <p className="mt-1 text-xs font-normal uppercase tracking-[0.16em] text-gray-400">Desde inicio del rango</p>
               </div>

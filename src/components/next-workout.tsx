@@ -5,6 +5,7 @@ import { CalendarDays } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 import { cacheResource, cacheWorkoutDay, getCachedResource } from '@/lib/offline-queue';
+import { LIFT_THEME, isLiftMarker } from '@/components/lift-theme';
 
 interface Set {
   id: string;
@@ -31,33 +32,6 @@ interface Session {
     movedAt: string;
   } | null;
   sets: Set[];
-}
-
-type LiftMarker = 'BP' | 'DL' | 'SQ';
-
-const LIFT_THEME: Record<LiftMarker, { card: string; badge: string; accent: string; name: string }> = {
-  BP: {
-    card: 'border-emerald-300/40 bg-gradient-to-br from-emerald-400/18 via-[#11161d] to-[#0e1319]',
-    badge: 'border-emerald-300/45 bg-emerald-300/15 text-emerald-100',
-    accent: 'text-emerald-200',
-    name: 'Bench Press',
-  },
-  DL: {
-    card: 'border-violet-300/40 bg-gradient-to-br from-violet-400/18 via-[#11161d] to-[#0e1319]',
-    badge: 'border-violet-300/45 bg-violet-300/15 text-violet-100',
-    accent: 'text-violet-200',
-    name: 'Deadlift',
-  },
-  SQ: {
-    card: 'border-orange-300/40 bg-gradient-to-br from-orange-400/18 via-[#11161d] to-[#0e1319]',
-    badge: 'border-orange-300/45 bg-orange-300/15 text-orange-100',
-    accent: 'text-orange-200',
-    name: 'Squat',
-  },
-};
-
-function isLiftMarker(value: string | null | undefined): value is LiftMarker {
-  return value === 'BP' || value === 'DL' || value === 'SQ';
 }
 
 function detect531Week(mainSets: Set[]): string {
@@ -240,12 +214,13 @@ export function NextWorkout() {
       </div>
 
       <div className="mt-4">
-        <a
-          href={`/workout/${workoutIsoDate}`}
-          className="text-xs uppercase tracking-[0.14em] text-gray-300 underline hover:text-white"
+        <button
+          type="button"
+          onClick={() => router.push(`/workout/${workoutIsoDate}`)}
+          className="inline-flex items-center rounded-lg border border-[#d6ff43]/45 bg-[#d6ff43]/10 px-2.5 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#e8f8b0] transition-colors hover:bg-[#d6ff43]/20"
         >
           Ir al workout
-        </a>
+        </button>
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Modal } from '@/components/ui/modal';
 import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
 import { ExerciseFormModal, type Exercise as PlanExercise } from '@/components/plan-wizard/exercise-form-modal';
+import { LIFT_THEME, isLiftMarker, type LiftMarker } from '@/components/lift-theme';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 import {
   cacheWorkoutDay,
@@ -36,6 +37,7 @@ interface Set {
   setFeelingScore?: number | null;
   rpe?: number | null;
   rir?: number | null;
+  liftId?: LiftMarker | null;
   exercise: {
     id: string;
     name: string;
@@ -401,6 +403,12 @@ export default function WorkoutDayPage() {
     : null;
 
   const sessionIds = sessions.map((session) => session.id);
+
+  const dayLift: LiftMarker | null = sessions
+    .flatMap((session) => session.sets)
+    .map((set) => set.liftId ?? null)
+    .find((value): value is LiftMarker => isLiftMarker(value)) ?? null;
+  const dayLiftTheme = dayLift ? LIFT_THEME[dayLift] : null;
 
   const rescheduledSources = Array.from(
     new Set(
@@ -1001,9 +1009,14 @@ export default function WorkoutDayPage() {
             const isComplete =
               exerciseGroup.sets.length > 0 && exerciseGroup.sets.every((set) => Boolean(set.isDone));
             const isCompletionAnimating = Boolean(recentlyCompletedExerciseIds[exerciseGroup.exerciseId]);
-            const baseCardClass = isNext
-              ? 'relative rounded-2xl bg-accent text-[#101010] shadow-lg p-6 text-left transition-all min-h-25'
-              : 'relative panel-soft p-6 text-white text-left transition-all min-h-25';
+const groupLift = exerciseGroup.sets
+            .map((set) => set.liftId ?? null)
+            .find((value): value is LiftMarker => isLiftMarker(value)) ?? null;
+          const liftTheme = groupLift ? LIFT_THEME[groupLift] : dayLiftTheme;
+          const nextAccent = isNext ? 'ring-2 ring-[#d6ff43]/70 accent-glow' : '';
+          const baseCardClass = liftTheme
+            ? `relative rounded-2xl ${liftTheme.card} ${nextAccent} p-6 text-white text-left transition-all min-h-25`
+            : `relative ${isNext ? `panel ${nextAccent}` : 'panel'} p-6 text-white text-left transition-all min-h-25`;
             let selectedCardClass = '';
             if (isSelected && isNext) {
               selectedCardClass = 'scale-[0.98] -translate-y-1';
@@ -1037,7 +1050,7 @@ export default function WorkoutDayPage() {
                     Ejercicio
                   </span>
                   <span
-                    className={`${isNext ? 'text-xs font-bold text-[#101010]' : 'text-xs text-gray-400'} transition-all duration-250 ease-out ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-3 scale-105 opacity-80' : ''}`}
+                    className={`${isNext ? 'text-xs font-bold text-[#d6ff43]' : 'text-xs text-gray-400'} transition-all duration-250 ease-out ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-3 scale-105 opacity-80' : ''}`}
                   >
                     {exerciseGroup.sets.length} set{exerciseGroup.sets.length > 1 ? 's' : ''}
                   </span>
@@ -1068,7 +1081,7 @@ export default function WorkoutDayPage() {
                   onClick={(event) => event.stopPropagation()}
                   aria-label={`Reordenar ${exerciseGroup.exerciseName}`}
                   title={`Reordenar ${exerciseGroup.exerciseName}`}
-                  className={`absolute right-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-gray-500 shadow-sm backdrop-blur-sm transition-colors active:cursor-grabbing hover:text-sky-300 ${isNext ? 'text-[#101010]/70' : 'text-gray-500'}`}
+                  className={`absolute right-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-gray-500 shadow-sm backdrop-blur-sm transition-colors active:cursor-grabbing hover:text-sky-300`}
                 >
                   <GripVertical size={18} className="pointer-events-none" />
                 </span>
@@ -1102,7 +1115,7 @@ export default function WorkoutDayPage() {
                   disabled={deletingExercise}
                   aria-label={`Eliminar ${exerciseGroup.exerciseName}`}
                   title={`Eliminar ${exerciseGroup.exerciseName}`}
-                  className={`absolute left-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 shadow-sm backdrop-blur-sm transition-colors hover:text-red-300 disabled:opacity-50 ${isNext ? 'text-[#101010]/70' : 'text-gray-500'}`}
+                  className={`absolute left-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 shadow-sm backdrop-blur-sm transition-colors hover:text-red-300 disabled:opacity-50 text-gray-500`}
                 >
                   <Trash2 size={18} className="pointer-events-none" />
                 </button>

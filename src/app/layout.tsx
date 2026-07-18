@@ -1,17 +1,11 @@
 import type { Metadata } from "next";
-import { Bebas_Neue, Rajdhani } from "next/font/google";
+import { Rajdhani } from "next/font/google";
 import "./globals.css";
 import { SharedElementProvider } from "@/components/ui/shared-element-provider";
 import { GlobalHamburger } from "@/components/global-hamburger";
 import { PwaBoot } from "@/components/pwa-boot";
 import { OfflineSyncStatus } from "@/components/offline-sync-status";
 import { OfflineWorkoutWarmup } from "@/components/offline-workout-warmup";
-
-const heading = Bebas_Neue({
-  variable: "--font-heading",
-  weight: "400",
-  subsets: ["latin"],
-});
 
 const body = Rajdhani({
   variable: "--font-body",
@@ -39,7 +33,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${heading.variable} ${body.variable} h-full antialiased`}
+      className={`${body.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <PwaBoot />

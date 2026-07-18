@@ -225,7 +225,6 @@ function HangTimerModalContent({ setupSeconds, workoutSeconds, onComplete }: Con
           font-family: var(--font-heading), sans-serif;
           letter-spacing: 0.06em;
           text-transform: uppercase;
-          font-style: italic;
           font-weight: 900;
           font-size: clamp(1.4rem, 7vw, 4rem);
           margin: 0 0 0.5rem;
@@ -237,7 +236,6 @@ function HangTimerModalContent({ setupSeconds, workoutSeconds, onComplete }: Con
           font-family: var(--font-heading), sans-serif;
           letter-spacing: -0.02em;
           text-transform: uppercase;
-          font-style: italic;
           font-weight: 900;
           font-size: clamp(5rem, 26vw, 22rem);
           line-height: 1;
@@ -258,7 +256,6 @@ function HangTimerModalContent({ setupSeconds, workoutSeconds, onComplete }: Con
           background: transparent;
           font-family: var(--font-heading), sans-serif;
           font-weight: 900;
-          font-style: italic;
           font-size: 1.1rem;
           letter-spacing: 0.06em;
           text-transform: uppercase;
