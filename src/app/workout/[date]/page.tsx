@@ -938,7 +938,7 @@ export default function WorkoutDayPage() {
   }
 
   return (
-    <main className="app-canvas min-h-screen px-4 py-8 sm:px-6 lg:px-8">
+    <main className="app-canvas min-h-screen px-4 pb-8 sm:px-6 lg:px-8">
       <div className="max-w-md mx-auto">
         {/* Dynamic Island: píldora flotante negra sticky */}
         <div className="sticky top-3 z-30 flex justify-center">
@@ -971,27 +971,31 @@ export default function WorkoutDayPage() {
         </div>
 
         {/* Acciones fuera del notch */}
-        <div className="mt-4 flex items-center justify-end gap-3">
+        <div className="mt-8 flex items-center justify-start gap-2">
           <button
             onClick={() => setShowRescheduleModal(true)}
             disabled={sessionIds.length === 0 || rescheduling}
-            className="btn-dark p-2"
+            className="inline-flex items-center gap-2 rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-sky-200 transition-colors hover:border-sky-400/50 hover:bg-sky-500/15 disabled:opacity-40"
             title="Reprogramar día"
             aria-label="Reprogramar día"
           >
-            <CalendarDays size={22} className="text-sky-300" />
+            <CalendarDays size={16} className="text-sky-300" />
+            Reagendar
           </button>
 
           <button
             onClick={() => setShowDeleteConfirm(true)}
             disabled={sessionIds.length === 0 || deleting}
-            className="btn-dark p-2"
+            className="inline-flex items-center gap-2 rounded-full border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-red-200 transition-colors hover:border-red-400/50 hover:bg-red-500/15 disabled:opacity-40"
             title="Eliminar workout"
             aria-label="Eliminar workout"
           >
-            <Trash2 size={22} className="text-red-400" />
+            <Trash2 size={16} className="text-red-300" />
+            Eliminar
           </button>
         </div>
+
+        <div className="mt-6" />
 
         {rescheduledSources.length > 0 && (
           <div className="mb-6 rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
