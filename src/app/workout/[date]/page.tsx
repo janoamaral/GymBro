@@ -940,56 +940,57 @@ export default function WorkoutDayPage() {
   return (
     <main className="app-canvas min-h-screen px-4 py-8 sm:px-6 lg:px-8">
       <div className="max-w-md mx-auto">
-        {/* Header tipo portada */}
-        <div className="relative mb-10 pl-14">
+        {/* Dynamic Island: píldora flotante negra sticky */}
+        <div className="sticky top-3 z-30 flex justify-center">
+          <div className="flex w-full items-center gap-2 rounded-full border border-white/10 bg-black/85 px-2 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-md">
+            <button
+              onClick={() => router.back()}
+              title="Volver"
+              aria-label="Volver"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5 text-white transition-colors hover:bg-white/10"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-heading uppercase tracking-widest text-gray-400">
+                {displayDate
+                  ? displayDate.toLocaleDateString('es-ES', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      timeZone: 'UTC',
+                    })
+                  : date}
+              </p>
+              <p className="truncate font-heading text-lg font-bold uppercase tracking-wider text-white">
+                Workout
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Acciones fuera del notch */}
+        <div className="mt-4 flex items-center justify-end gap-3">
           <button
-            onClick={() => router.back()}
-            title="Volver"
-            aria-label="Volver"
-            className="btn-dark absolute left-0 top-1 h-10 w-10 p-2"
+            onClick={() => setShowRescheduleModal(true)}
+            disabled={sessionIds.length === 0 || rescheduling}
+            className="btn-dark p-2"
+            title="Reprogramar día"
+            aria-label="Reprogramar día"
           >
-            <ArrowLeft size={24} className="text-white" />
+            <CalendarDays size={22} className="text-sky-300" />
           </button>
-          <div>
-            <p className="text-lg text-gray-400 font-heading uppercase tracking-wider">
-              {displayDate
-                ? displayDate.toLocaleDateString('es-ES', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    timeZone: 'UTC',
-                  })
-                : date}
-            </p>
-            <h1 className="text-4xl sm:text-5xl font-heading font-black leading-tight text-white drop-shadow-md uppercase">
-              Workout
-            </h1>
-          </div>
 
-          <div className="ml-auto flex items-center gap-3">
-            {/* Botón reprogramar solo icono */}
-            <button
-              onClick={() => setShowRescheduleModal(true)}
-              disabled={sessionIds.length === 0 || rescheduling}
-              className="btn-dark p-2"
-              title="Reprogramar día"
-              aria-label="Reprogramar día"
-            >
-              <CalendarDays size={22} className="text-sky-300" />
-            </button>
-
-            {/* Botón eliminar solo icono */}
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={sessionIds.length === 0 || deleting}
-              className="btn-dark p-2"
-              title="Eliminar workout"
-              aria-label="Eliminar workout"
-            >
-              <Trash2 size={22} className="text-red-400" />
-            </button>
-          </div>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={sessionIds.length === 0 || deleting}
+            className="btn-dark p-2"
+            title="Eliminar workout"
+            aria-label="Eliminar workout"
+          >
+            <Trash2 size={22} className="text-red-400" />
+          </button>
         </div>
 
         {rescheduledSources.length > 0 && (
