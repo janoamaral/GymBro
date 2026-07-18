@@ -205,9 +205,9 @@ export function ProgressChart() {
       <div className="relative">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-xl font-bold normal-case not-italic">Chart</h3>
+            <h3 className="text-xl font-bold">Chart</h3>
             <p className="mt-1 text-xs text-gray-400">Categoría</p>
-            <p className="text-lg font-semibold normal-case not-italic">{LIFT_LABELS[liftId]}</p>
+            <p className="text-lg font-semibold">{LIFT_LABELS[liftId]}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-xs">
@@ -338,7 +338,7 @@ export function ProgressChart() {
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-gray-400">{rangeLabel}</p>
               <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-gray-500">Max Weight</p>
-              <p className="text-4xl font-semibold leading-none normal-case not-italic text-emerald-300">
+              <p className="text-4xl font-semibold leading-none text-emerald-300">
                 {maxWeightPoint ? maxWeightPoint.maxWeight.toFixed(1) : '--'}
                 <span className="ml-1 text-base text-gray-300">{unit}</span>
               </p>
@@ -346,14 +346,14 @@ export function ProgressChart() {
 
             <div>
               <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">e1RM</p>
-              <p className="text-2xl font-semibold leading-none normal-case not-italic">
+              <p className="text-2xl font-semibold leading-none">
                 {maxPoint ? maxPoint.e1rm.toFixed(1) : '--'}
                 <span className="ml-1 text-sm text-gray-300">{unit}</span>
               </p>
             </div>
           </div>
 
-          <div className={`text-right text-3xl font-semibold normal-case not-italic ${trend >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+          <div className={`text-right text-3xl font-semibold ${trend >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
             <p>{trend >= 0 ? '↗' : '↘'} {trendLabel}</p>
             <p className="mt-1 text-xs font-normal uppercase tracking-[0.16em] text-gray-400">Desde inicio del rango</p>
           </div>

@@ -232,7 +232,6 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
           font-family: var(--font-heading), sans-serif;
           letter-spacing: 0.06em;
           text-transform: uppercase;
-          font-style: italic;
           font-weight: 900;
           font-size: clamp(1.5rem, 8vw, 5rem);
           color: #0c1100;
@@ -243,7 +242,6 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
           font-family: var(--font-heading), sans-serif;
           letter-spacing: -0.02em;
           text-transform: uppercase;
-          font-style: italic;
           font-weight: 900;
           font-size: clamp(5rem, 26vw, 24rem);
           color: #0c1100;
@@ -256,7 +254,6 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
           font-family: var(--font-heading), sans-serif;
           letter-spacing: 0.04em;
           text-transform: uppercase;
-          font-style: italic;
           font-weight: 900;
           font-size: clamp(7.5rem, 36vw, 34rem);
           color: #0c1100;
@@ -291,7 +288,6 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
           margin-bottom: 0.5rem;
           font-family: var(--font-heading), sans-serif;
           font-weight: 900;
-          font-style: italic;
           font-size: 1.6rem;
           letter-spacing: 0.04em;
           color: #0c1100;
@@ -313,7 +309,6 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
           color: #d6ff43;
           font-family: var(--font-heading), sans-serif;
           font-weight: 900;
-          font-style: italic;
           font-size: 1.1rem;
           letter-spacing: 0.06em;
           text-transform: uppercase;
@@ -330,7 +325,6 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
           color: #000;
           font-family: var(--font-heading), sans-serif;
           font-weight: 900;
-          font-style: italic;
           font-size: 1.1rem;
           letter-spacing: 0.06em;
           text-transform: uppercase;

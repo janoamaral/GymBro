@@ -967,41 +967,41 @@ export default function ExerciseDetailPage() {
 
   return (
     <main className="app-canvas min-h-screen">
-      {/* Header tipo portada: sticky full-width, contenido centrado, fijo al top del viewport */}
-      <div className="sticky top-0 z-30 w-full bg-[#030405]/85 backdrop-blur-sm">
-        <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-6 flex gap-4">
+      {/* Dynamic Island: píldora flotante negra sticky */}
+      <div className="sticky top-3 z-30 flex justify-center px-4">
+        <div className="flex w-full max-w-md items-center gap-2 rounded-full border border-white/10 bg-black/85 px-2 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-md">
           <button
             onClick={() => router.back()}
             title="Volver"
             aria-label="Volver"
-            className="btn-dark h-10 w-10 p-2 shrink-0"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5 text-white transition-colors hover:bg-white/10"
           >
-            <ArrowLeft size={24} className="text-white" />
+            <ArrowLeft size={18} />
           </button>
-          <div className="min-w-0">
-            <h1
-              className={`text-4xl sm:text-5xl font-heading font-black leading-tight text-white drop-shadow-md uppercase transition-all duration-300 ease-out ${isTitleEntering ? 'translate-y-10 scale-90 opacity-50' : 'translate-y-0 scale-100 opacity-100'}`}
-            >
-              {exerciseName}
-            </h1>
+          <div className="min-w-0 flex-1">
             <p
-              className={`mt-1 text-xs font-heading uppercase tracking-[0.2em] text-gray-300 transition-all duration-300 ease-out ${isMetaEntering ? 'translate-y-8 scale-95 opacity-40' : 'translate-y-0 scale-100 opacity-100'}`}
+              className={`text-xs font-heading uppercase tracking-widest text-gray-400 transition-all duration-300 ease-out ${isMetaEntering ? 'translate-x-2 opacity-50' : 'translate-x-0 opacity-100'}`}
             >
               {headerSetCountText}
             </p>
-            {exerciseOneRm !== null && oneRmUnit && (
-              <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-[#d6ff43]/45 bg-[#d6ff43]/10 px-2.5 py-1.5 text-[#e8f8b0]">
-                <Dumbbell size={14} className="text-[#d6ff43]" />
-                <p className="text-xs font-semibold uppercase tracking-[0.14em]">
-                  1RM {exerciseLiftId ? `(${exerciseLiftId})` : ''}: {exerciseOneRm} {oneRmUnit}
-                </p>
-              </div>
-            )}
+            <p
+              className={`truncate font-heading text-lg font-bold uppercase tracking-wider text-white transition-all duration-300 ease-out ${isTitleEntering ? 'translate-x-2 opacity-50' : 'translate-x-0 opacity-100'}`}
+            >
+              {exerciseName}
+            </p>
           </div>
+          {exerciseOneRm !== null && oneRmUnit && (
+            <div
+              className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#d6ff43]/45 bg-[#d6ff43]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#e8f8b0] transition-all duration-300 ease-out ${isMetaEntering ? 'scale-90 opacity-50' : 'scale-100 opacity-100'}`}
+            >
+              <Dumbbell size={12} className="text-[#d6ff43]" />
+              1RM {exerciseLiftId ? `(${exerciseLiftId})` : ''}: {exerciseOneRm} {oneRmUnit}
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+      <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 pt-10">
         {syncError && (
           <div className="mb-4 rounded-lg border border-amber-300/50 bg-amber-300/15 px-3 py-2 text-xs font-semibold text-amber-100">
             {syncError}

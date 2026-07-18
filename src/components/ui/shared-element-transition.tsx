@@ -58,7 +58,6 @@ export function SharedElementTransition({
         fontSize: '2rem',
         textTransform: 'uppercase',
         letterSpacing: '0.06em',
-        fontStyle: 'italic',
         background: 'none',
         color: '#101010',
         lineHeight: 1.1,

@@ -7,6 +7,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Modal } from '@/components/ui/modal';
 import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
 import { ExerciseFormModal, type Exercise as PlanExercise } from '@/components/plan-wizard/exercise-form-modal';
+import { LIFT_THEME, isLiftMarker, type LiftMarker } from '@/components/lift-theme';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 import {
   cacheWorkoutDay,
@@ -36,6 +37,7 @@ interface Set {
   setFeelingScore?: number | null;
   rpe?: number | null;
   rir?: number | null;
+  liftId?: LiftMarker | null;
   exercise: {
     id: string;
     name: string;
@@ -401,6 +403,12 @@ export default function WorkoutDayPage() {
     : null;
 
   const sessionIds = sessions.map((session) => session.id);
+
+  const dayLift: LiftMarker | null = sessions
+    .flatMap((session) => session.sets)
+    .map((set) => set.liftId ?? null)
+    .find((value): value is LiftMarker => isLiftMarker(value)) ?? null;
+  const dayLiftTheme = dayLift ? LIFT_THEME[dayLift] : null;
 
   const rescheduledSources = Array.from(
     new Set(
@@ -930,59 +938,64 @@ export default function WorkoutDayPage() {
   }
 
   return (
-    <main className="app-canvas min-h-screen px-4 py-8 sm:px-6 lg:px-8">
+    <main className="app-canvas min-h-screen px-4 pb-8 sm:px-6 lg:px-8">
       <div className="max-w-md mx-auto">
-        {/* Header tipo portada */}
-        <div className="relative mb-10 pl-14">
-          <button
-            onClick={() => router.back()}
-            title="Volver"
-            aria-label="Volver"
-            className="btn-dark absolute left-0 top-1 h-10 w-10 p-2"
-          >
-            <ArrowLeft size={24} className="text-white" />
-          </button>
-          <div>
-            <p className="text-lg text-gray-400 font-heading uppercase tracking-wider">
-              {displayDate
-                ? displayDate.toLocaleDateString('es-ES', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    timeZone: 'UTC',
-                  })
-                : date}
-            </p>
-            <h1 className="text-4xl sm:text-5xl font-heading font-black leading-tight text-white drop-shadow-md uppercase">
-              Workout
-            </h1>
-          </div>
-
-          <div className="ml-auto flex items-center gap-3">
-            {/* Botón reprogramar solo icono */}
+        {/* Dynamic Island: píldora flotante negra sticky */}
+        <div className="sticky top-3 z-30 flex justify-center">
+          <div className="flex w-full items-center gap-2 rounded-full border border-white/10 bg-black/85 px-2 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-md">
             <button
-              onClick={() => setShowRescheduleModal(true)}
-              disabled={sessionIds.length === 0 || rescheduling}
-              className="btn-dark p-2"
-              title="Reprogramar día"
-              aria-label="Reprogramar día"
+              onClick={() => router.back()}
+              title="Volver"
+              aria-label="Volver"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5 text-white transition-colors hover:bg-white/10"
             >
-              <CalendarDays size={22} className="text-sky-300" />
+              <ArrowLeft size={18} />
             </button>
-
-            {/* Botón eliminar solo icono */}
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={sessionIds.length === 0 || deleting}
-              className="btn-dark p-2"
-              title="Eliminar workout"
-              aria-label="Eliminar workout"
-            >
-              <Trash2 size={22} className="text-red-400" />
-            </button>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-heading uppercase tracking-widest text-gray-400">
+                {displayDate
+                  ? displayDate.toLocaleDateString('es-ES', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      timeZone: 'UTC',
+                    })
+                  : date}
+              </p>
+              <p className="truncate font-heading text-lg font-bold uppercase tracking-wider text-white">
+                Workout
+              </p>
+            </div>
           </div>
         </div>
+
+        {/* Acciones fuera del notch */}
+        <div className="mt-8 flex items-center justify-start gap-2">
+          <button
+            onClick={() => setShowRescheduleModal(true)}
+            disabled={sessionIds.length === 0 || rescheduling}
+            className="inline-flex items-center gap-2 rounded-full border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-sky-200 transition-colors hover:border-sky-400/50 hover:bg-sky-500/15 disabled:opacity-40"
+            title="Reprogramar día"
+            aria-label="Reprogramar día"
+          >
+            <CalendarDays size={16} className="text-sky-300" />
+            Reagendar
+          </button>
+
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={sessionIds.length === 0 || deleting}
+            className="inline-flex items-center gap-2 rounded-full border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-red-200 transition-colors hover:border-red-400/50 hover:bg-red-500/15 disabled:opacity-40"
+            title="Eliminar workout"
+            aria-label="Eliminar workout"
+          >
+            <Trash2 size={16} className="text-red-300" />
+            Eliminar
+          </button>
+        </div>
+
+        <div className="mt-6" />
 
         {rescheduledSources.length > 0 && (
           <div className="mb-6 rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
@@ -1001,9 +1014,14 @@ export default function WorkoutDayPage() {
             const isComplete =
               exerciseGroup.sets.length > 0 && exerciseGroup.sets.every((set) => Boolean(set.isDone));
             const isCompletionAnimating = Boolean(recentlyCompletedExerciseIds[exerciseGroup.exerciseId]);
-            const baseCardClass = isNext
-              ? 'relative rounded-2xl bg-accent text-[#101010] shadow-lg p-6 text-left transition-all min-h-25'
-              : 'relative panel-soft p-6 text-white text-left transition-all min-h-25';
+const groupLift = exerciseGroup.sets
+            .map((set) => set.liftId ?? null)
+            .find((value): value is LiftMarker => isLiftMarker(value)) ?? null;
+          const liftTheme = groupLift ? LIFT_THEME[groupLift] : dayLiftTheme;
+          const nextAccent = isNext ? 'ring-2 ring-[#d6ff43]/70 accent-glow' : '';
+          const baseCardClass = liftTheme
+            ? `relative rounded-2xl ${liftTheme.card} ${nextAccent} p-6 text-white text-left transition-all min-h-25`
+            : `relative ${isNext ? `panel ${nextAccent}` : 'panel'} p-6 text-white text-left transition-all min-h-25`;
             let selectedCardClass = '';
             if (isSelected && isNext) {
               selectedCardClass = 'scale-[0.98] -translate-y-1';
@@ -1037,7 +1055,7 @@ export default function WorkoutDayPage() {
                     Ejercicio
                   </span>
                   <span
-                    className={`${isNext ? 'text-xs font-bold text-[#101010]' : 'text-xs text-gray-400'} transition-all duration-250 ease-out ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-3 scale-105 opacity-80' : ''}`}
+                    className={`${isNext ? 'text-xs font-bold text-[#d6ff43]' : 'text-xs text-gray-400'} transition-all duration-250 ease-out ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-3 scale-105 opacity-80' : ''}`}
                   >
                     {exerciseGroup.sets.length} set{exerciseGroup.sets.length > 1 ? 's' : ''}
                   </span>
@@ -1068,7 +1086,7 @@ export default function WorkoutDayPage() {
                   onClick={(event) => event.stopPropagation()}
                   aria-label={`Reordenar ${exerciseGroup.exerciseName}`}
                   title={`Reordenar ${exerciseGroup.exerciseName}`}
-                  className={`absolute right-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-gray-500 shadow-sm backdrop-blur-sm transition-colors active:cursor-grabbing hover:text-sky-300 ${isNext ? 'text-[#101010]/70' : 'text-gray-500'}`}
+                  className={`absolute right-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 text-gray-500 shadow-sm backdrop-blur-sm transition-colors active:cursor-grabbing hover:text-sky-300`}
                 >
                   <GripVertical size={18} className="pointer-events-none" />
                 </span>
@@ -1102,7 +1120,7 @@ export default function WorkoutDayPage() {
                   disabled={deletingExercise}
                   aria-label={`Eliminar ${exerciseGroup.exerciseName}`}
                   title={`Eliminar ${exerciseGroup.exerciseName}`}
-                  className={`absolute left-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 shadow-sm backdrop-blur-sm transition-colors hover:text-red-300 disabled:opacity-50 ${isNext ? 'text-[#101010]/70' : 'text-gray-500'}`}
+                  className={`absolute left-3 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 shadow-sm backdrop-blur-sm transition-colors hover:text-red-300 disabled:opacity-50 text-gray-500`}
                 >
                   <Trash2 size={18} className="pointer-events-none" />
                 </button>
