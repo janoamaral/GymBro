@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Dynamic Island: top recto, bottom con curva md. */
+.dynamic-island {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
 :root {
   --background: #020202;
   --surface: #101010;

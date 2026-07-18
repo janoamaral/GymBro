@@ -967,9 +967,9 @@ export default function ExerciseDetailPage() {
 
   return (
     <main className="app-canvas min-h-screen">
-      {/* Dynamic Island: píldora flotante negra sticky */}
-      <div className="sticky top-3 z-30 flex justify-center px-4">
-        <div className="flex w-full max-w-md items-center gap-2 rounded-full border border-white/10 bg-black/85 px-2 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-md">
+      {/* Dynamic Island: píldora flotante negra sticky pegada al top */}
+      <div className="sticky top-0 z-30 flex justify-center px-4">
+        <div className="dynamic-island flex w-full max-w-md items-center gap-2 bg-black/85 px-2 pb-2 pt-4 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-md">
           <button
             onClick={() => router.back()}
             title="Volver"
