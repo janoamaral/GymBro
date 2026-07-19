@@ -22,6 +22,25 @@ describe('offline queue types', () => {
     assert.equal(mutation.type, 'set_update');
   });
 
+  it('supports set_update payload with unit', () => {
+    const mutation: QueueMutation = {
+      id: 'm2',
+      type: 'set_update',
+      targetId: 'set-2',
+      endpoint: '/api/workouts/s1/sets/set-2',
+      method: 'PATCH',
+      payload: {
+        targetWeight: 22,
+        unit: 'lb',
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      attempts: 0,
+    };
+
+    assert.equal(mutation.payload.unit, 'lb');
+  });
+
   it('supports reorder payload shape', () => {
     const mutation: QueueMutation = {
       id: 'm2',

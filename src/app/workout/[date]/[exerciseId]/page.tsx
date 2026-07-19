@@ -52,7 +52,7 @@ interface SessionWithSets {
   sets: Set[];
 }
 
-type SetServerSnapshot = Pick<Set, 'repsTarget' | 'targetWeight' | 'durationSeconds' | 'distanceMeters' | 'setFeelingScore' | 'rpe' | 'rir' | 'isDone'>;
+type SetServerSnapshot = Pick<Set, 'repsTarget' | 'targetWeight' | 'durationSeconds' | 'distanceMeters' | 'setFeelingScore' | 'rpe' | 'rir' | 'isDone' | 'unit'>;
 type SetSyncState = {
   metricsQueued: boolean;
   metricsInFlight: boolean;
@@ -178,6 +178,7 @@ export default function ExerciseDetailPage() {
         rpe: set.rpe,
         rir: set.rir,
         isDone: set.isDone,
+        unit: set.unit,
       };
     });
   };
@@ -731,6 +732,7 @@ export default function ExerciseDetailPage() {
       rpe: set.rpe,
       rir: set.rir,
       isDone: set.isDone,
+      unit: set.unit,
     };
 
     setEditError('');
@@ -744,6 +746,7 @@ export default function ExerciseDetailPage() {
               targetWeight: nextTargetWeight,
               durationSeconds: nextDuration,
               distanceMeters: nextDistance,
+              unit: editUnit,
             }
           : currentSet
       )
@@ -755,6 +758,7 @@ export default function ExerciseDetailPage() {
         targetWeight: nextTargetWeight,
         durationSeconds: nextDuration,
         distanceMeters: nextDistance,
+        unit: editUnit,
       },
     ]);
 
@@ -763,6 +767,7 @@ export default function ExerciseDetailPage() {
       targetWeight: nextTargetWeight,
       durationSeconds: nextDuration,
       distanceMeters: nextDistance,
+      unit: editUnit,
     };
 
     const persistConfirmed = () => {
@@ -795,7 +800,7 @@ export default function ExerciseDetailPage() {
       }
 
       persistConfirmed();
-      await acknowledgeSetMutationFields(set.id, ['repsTarget', 'targetWeight', 'durationSeconds', 'distanceMeters']);
+      await acknowledgeSetMutationFields(set.id, ['repsTarget', 'targetWeight', 'durationSeconds', 'distanceMeters', 'unit']);
       setEditingSetId(null);
     } catch (err) {
       if (!navigator.onLine || err instanceof TypeError) {
@@ -814,6 +819,7 @@ export default function ExerciseDetailPage() {
                   targetWeight: confirmedBeforeEdit.targetWeight,
                   durationSeconds: confirmedBeforeEdit.durationSeconds,
                   distanceMeters: confirmedBeforeEdit.distanceMeters,
+                  unit: confirmedBeforeEdit.unit,
                 }
               : currentSet
           )

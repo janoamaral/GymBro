@@ -11,6 +11,7 @@ const updateSetSchema = z.object({
   targetWeight: z.number().min(0).optional(),
   durationSeconds: z.number().int().min(1).max(86400).nullable().optional(),
   distanceMeters: z.number().min(0.1).max(100000).nullable().optional(),
+  unit: z.enum(["kg", "lb"]).optional(),
   logAsAmrap: z.boolean().optional(),
   isDone: z.boolean().optional(),
   setFeelingScore: z.number().int().min(1).max(5).nullable().optional(),
@@ -42,6 +43,8 @@ export async function PATCH(
       return NextResponse.json({ error: "SET_NOT_FOUND" }, { status: 404 });
     }
 
+    const resolvedUnit = payload.unit ?? set.unit;
+
     const shouldLogAmrap =
       payload.repsDone !== undefined && payload.repsDone !== null && (set.isAmrap || payload.logAsAmrap);
 
@@ -62,6 +65,7 @@ export async function PATCH(
         targetWeight: payload.targetWeight,
         durationSeconds: payload.durationSeconds,
         distanceMeters: payload.distanceMeters,
+        unit: resolvedUnit,
         e1rm: amrapResult?.e1rm,
         amrapStatus: amrapResult?.status,
         amrapLoggedAt: amrapResult ? new Date() : undefined,
