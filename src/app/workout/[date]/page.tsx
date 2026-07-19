@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type TouchEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarDays, GripVertical, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Ban, CalendarDays, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Modal } from '@/components/ui/modal';
 import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
@@ -13,6 +13,7 @@ import {
   cacheWorkoutDay,
   clearCachedWorkoutDay,
   enqueueAddExerciseMutation,
+  enqueueCancelExerciseMutation,
   enqueueDeleteExerciseMutation,
   enqueueDeleteWorkoutMutation,
   enqueueReorderMutation,
@@ -26,6 +27,12 @@ const SHARED_EXERCISE_TITLE_KEY = 'shared-exercise-title-transition';
 const TOUCH_DRAG_THRESHOLD_PX = 12;
 const REORDER_PERSIST_DEBOUNCE_MS = 450;
 
+const CANCEL_REASONS = {
+  FATIGUE: 1,
+  NO_TIME: 2,
+  OTHER: 3,
+} as const;
+
 interface Set {
   id: string;
   exerciseOrder: number;
@@ -34,6 +41,8 @@ interface Set {
   targetWeight: number;
   unit: string;
   isDone?: boolean;
+  isCancelled?: boolean;
+  cancelReasonCode?: number | null;
   setFeelingScore?: number | null;
   rpe?: number | null;
   rir?: number | null;
@@ -127,6 +136,8 @@ function setsEqualForDisplay(a: SessionWithSets[], b: SessionWithSets[]): boolea
     }
     if (
       sa.isDone !== sb.isDone ||
+      sa.isCancelled !== sb.isCancelled ||
+      sa.cancelReasonCode !== sb.cancelReasonCode ||
       sa.repsTarget !== sb.repsTarget ||
       sa.targetWeight !== sb.targetWeight ||
       sa.setFeelingScore !== sb.setFeelingScore ||
@@ -181,6 +192,10 @@ export default function WorkoutDayPage() {
   const [deletingExerciseId, setDeletingExerciseId] = useState<string | null>(null);
   const [showDeleteExerciseConfirm, setShowDeleteExerciseConfirm] = useState(false);
   const [deletingExercise, setDeletingExercise] = useState(false);
+  const [cancellingExerciseId, setCancellingExerciseId] = useState<string | null>(null);
+  const [showCancelExerciseModal, setShowCancelExerciseModal] = useState(false);
+  const [cancelReasonCode, setCancelReasonCode] = useState<number>(CANCEL_REASONS.FATIGUE);
+  const [cancelling, setCancelling] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [addExerciseError, setAddExerciseError] = useState('');
   const [addingExercise, setAddingExercise] = useState(false);
@@ -268,10 +283,10 @@ export default function WorkoutDayPage() {
         setExercises((prev) => {
           const next = groupSetsByExercise(fetchedSessions);
           const prevKey = prev
-            .map((g) => `${g.exerciseId}:${g.exerciseOrder}:${g.sets.map((s) => `${s.id}:${s.isDone ? 1 : 0}`).join(',')}`)
+            .map((g) => `${g.exerciseId}:${g.exerciseOrder}:${g.sets.map((s) => `${s.id}:${s.isDone ? 1 : 0}:${s.isCancelled ? 1 : 0}:${s.cancelReasonCode ?? ''}`).join(',')}`)
             .join('|');
           const nextKey = next
-            .map((g) => `${g.exerciseId}:${g.exerciseOrder}:${g.sets.map((s) => `${s.id}:${s.isDone ? 1 : 0}`).join(',')}`)
+            .map((g) => `${g.exerciseId}:${g.exerciseOrder}:${g.sets.map((s) => `${s.id}:${s.isDone ? 1 : 0}:${s.isCancelled ? 1 : 0}:${s.cancelReasonCode ?? ''}`).join(',')}`)
             .join('|');
           return prevKey === nextKey ? prev : next;
         });
@@ -644,6 +659,84 @@ export default function WorkoutDayPage() {
     }
   };
 
+  const handleCancelExercise = async () => {
+    const exerciseId = cancellingExerciseId;
+    if (!exerciseId) {
+      setShowCancelExerciseModal(false);
+      return;
+    }
+
+    setCancelling(true);
+    setSyncError('');
+
+    const reasonCode = cancelReasonCode;
+    const setPatches = sessions
+      .flatMap((session) => session.sets)
+      .filter((set) => set.exercise.id === exerciseId)
+      .map((set) => ({
+        id: set.id,
+        isCancelled: true,
+        cancelReasonCode: reasonCode,
+      }));
+
+    try {
+      const response = await fetch(
+        `/api/workouts/by-date/${date}/exercises?exerciseId=${encodeURIComponent(exerciseId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cancelled: true, cancelReasonCode: reasonCode }),
+        },
+      );
+
+      if (!response.ok) {
+        if (response.status === 429 || response.status >= 500) {
+          throw new TypeError('retryable');
+        }
+
+        const data = (await response.json().catch(() => null)) as { error?: string; detail?: string } | null;
+        throw new Error(data?.detail ?? data?.error ?? 'No se pudo cancelar el ejercicio');
+      }
+
+      const nextSessions = sessions.map((session) => ({
+        ...session,
+        sets: session.sets.map((set) =>
+          set.exercise.id === exerciseId
+            ? { ...set, isCancelled: true, cancelReasonCode: reasonCode }
+            : set,
+        ),
+      }));
+      setSessions(nextSessions);
+      setExercises(groupSetsByExercise(nextSessions));
+      void cacheWorkoutDay(date, nextSessions);
+      setShowCancelExerciseModal(false);
+      setCancellingExerciseId(null);
+    } catch (err) {
+      if (!navigator.onLine || err instanceof TypeError) {
+        const nextSessions = sessions.map((session) => ({
+          ...session,
+          sets: session.sets.map((set) =>
+            set.exercise.id === exerciseId
+              ? { ...set, isCancelled: true, cancelReasonCode: reasonCode }
+              : set,
+          ),
+        }));
+        setSessions(nextSessions);
+        setExercises(groupSetsByExercise(nextSessions));
+        void cacheWorkoutDay(date, nextSessions);
+        void patchCachedSetsInDay(date, setPatches);
+        await enqueueCancelExerciseMutation(date, exerciseId, reasonCode);
+        setSyncError('Guardado offline. Se sincronizará cuando vuelva internet.');
+        setShowCancelExerciseModal(false);
+        setCancellingExerciseId(null);
+      } else {
+        setSyncError(err instanceof Error ? err.message : 'No se pudo cancelar el ejercicio');
+      }
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const handleDeleteExercise = async () => {
     const exerciseId = deletingExerciseId;
     if (!exerciseId) {
@@ -700,7 +793,7 @@ export default function WorkoutDayPage() {
   };
 
   const nextExerciseIndex = exercises.findIndex((exerciseGroup) =>
-    exerciseGroup.sets.some((set) => !set.isDone)
+    exerciseGroup.sets.some((set) => !set.isDone && !set.isCancelled),
   );
 
   const handleExerciseOpen = (
@@ -1013,6 +1106,8 @@ export default function WorkoutDayPage() {
             const isDragTargetCard = dragOverExerciseId === exerciseGroup.exerciseId;
             const isComplete =
               exerciseGroup.sets.length > 0 && exerciseGroup.sets.every((set) => Boolean(set.isDone));
+            const isCancelled =
+              exerciseGroup.sets.length > 0 && exerciseGroup.sets.some((set) => Boolean(set.isCancelled));
             const isCompletionAnimating = Boolean(recentlyCompletedExerciseIds[exerciseGroup.exerciseId]);
 const groupLift = exerciseGroup.sets
             .map((set) => set.liftId ?? null)
@@ -1052,7 +1147,7 @@ const groupLift = exerciseGroup.sets
               >
                 <div className="mb-1 flex items-center justify-between gap-3">
                   <span className={isNext ? 'text-xs font-heading uppercase tracking-widest opacity-70' : 'text-xs font-heading uppercase tracking-widest text-gray-400'}>
-                    Ejercicio
+                    {isCancelled ? 'Cancelado' : 'Ejercicio'}
                   </span>
                   <span
                     className={`${isNext ? 'text-xs font-bold text-[#d6ff43]' : 'text-xs text-gray-400'} transition-all duration-250 ease-out ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-3 scale-105 opacity-80' : ''}`}
@@ -1092,7 +1187,7 @@ const groupLift = exerciseGroup.sets
                 </span>
                 <span
                   data-exercise-title
-                  className={`set-card-title ${isNext || isComplete ? 'text-3xl font-black font-heading' : 'text-2xl font-bold font-heading'} ${isComplete ? 'set-card-title--done' : ''} transition-all duration-200 ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-8 scale-110 opacity-70' : ''}`}
+                  className={`set-card-title ${isNext || isComplete ? 'text-3xl font-black font-heading' : 'text-2xl font-bold font-heading'} ${isComplete ? 'set-card-title--done' : ''} ${isCancelled ? 'line-through opacity-50' : ''} transition-all duration-200 ${transitioningExerciseId === exerciseGroup.exerciseId ? '-translate-y-8 scale-110 opacity-70' : ''}`}
                 >
                   <span
                     className={`set-card-title__label ${
@@ -1124,6 +1219,23 @@ const groupLift = exerciseGroup.sets
                 >
                   <Trash2 size={18} className="pointer-events-none" />
                 </button>
+                {!isCancelled && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setCancellingExerciseId(exerciseGroup.exerciseId);
+                      setCancelReasonCode(CANCEL_REASONS.FATIGUE);
+                      setShowCancelExerciseModal(true);
+                    }}
+                    disabled={cancelling}
+                    aria-label={`Cancelar ${exerciseGroup.exerciseName}`}
+                    title={`Cancelar ${exerciseGroup.exerciseName}`}
+                    className={`absolute left-14 bottom-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/20 shadow-sm backdrop-blur-sm transition-colors hover:text-amber-300 disabled:opacity-50 text-gray-500`}
+                  >
+                    <Ban size={18} className="pointer-events-none" />
+                  </button>
+                )}
               </button>
             );
           })}
@@ -1184,6 +1296,71 @@ const groupLift = exerciseGroup.sets
         cancelText="Cancelar"
         isDanger
       />
+
+      <Modal
+        isOpen={showCancelExerciseModal}
+        onClose={() => {
+          if (!cancelling) {
+            setShowCancelExerciseModal(false);
+            setCancellingExerciseId(null);
+          }
+        }}
+        title="Cancelar ejercicio"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-300">
+            ¿Por qué no vas a realizar este ejercicio? El motivo se guardará para que el coach virtual pueda ayudarte en el futuro.
+          </p>
+
+          <div className="space-y-2">
+            {[
+              { code: CANCEL_REASONS.FATIGUE, label: 'Cansancio' },
+              { code: CANCEL_REASONS.NO_TIME, label: 'Falta de tiempo' },
+              { code: CANCEL_REASONS.OTHER, label: 'Otro' },
+            ].map((reason) => (
+              <label
+                key={reason.code}
+                className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
+                  cancelReasonCode === reason.code
+                    ? 'border-[#d6ff43]/50 bg-[#d6ff43]/10'
+                    : 'border-white/10 bg-white/5 hover:bg-white/10'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="cancelReason"
+                  value={reason.code}
+                  checked={cancelReasonCode === reason.code}
+                  onChange={() => setCancelReasonCode(reason.code)}
+                  disabled={cancelling}
+                  className="h-4 w-4 accent-[#d6ff43]"
+                />
+                <span className="text-sm font-medium text-white">{reason.label}</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => {
+                setShowCancelExerciseModal(false);
+                setCancellingExerciseId(null);
+              }}
+              className="btn-dark px-4 py-2"
+              disabled={cancelling}
+            >
+              Volver
+            </button>
+            <button
+              onClick={handleCancelExercise}
+              className="btn-accent px-4 py-2"
+              disabled={cancelling}
+            >
+              {cancelling ? 'Guardando...' : 'Confirmar cancelación'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <ExerciseFormModal
         isOpen={showAddExerciseModal}

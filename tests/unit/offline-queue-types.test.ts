@@ -58,4 +58,24 @@ describe('offline queue types', () => {
 
     assert.equal(mutation.method, 'PATCH');
   });
+
+  it('supports cancel_exercise payload shape', () => {
+    const mutation: QueueMutation = {
+      id: 'm3',
+      type: 'cancel_exercise',
+      targetId: '2026-07-20:ex-1',
+      endpoint: '/api/workouts/by-date/2026-07-20/exercises?exerciseId=ex-1',
+      method: 'PATCH',
+      payload: {
+        cancelled: true,
+        cancelReasonCode: 2,
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      attempts: 0,
+    };
+
+    assert.equal(mutation.type, 'cancel_exercise');
+    assert.equal((mutation.payload as { cancelReasonCode?: number }).cancelReasonCode, 2);
+  });
 });
