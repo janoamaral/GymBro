@@ -12,7 +12,8 @@ type QueueMutationType =
   | "reschedule_workout"
   | "delete_workout"
   | "add_exercise_to_day"
-  | "delete_exercise_from_day";
+  | "delete_exercise_from_day"
+  | "cancel_exercise";
 
 type AddExercisePayload = {
   exerciseId?: string;
@@ -26,6 +27,11 @@ type AddExercisePayload = {
 };
 
 type DeleteExercisePayload = Record<string, never>;
+
+type CancelExercisePayload = {
+  cancelled: true;
+  cancelReasonCode: number;
+};
 
 type SetUpdatePayload = {
   setFeelingScore?: number | null;
@@ -46,6 +52,7 @@ type QueueMutationPayload =
   | { rescheduledToLocalDate: string; rescheduleReason: string | null }
   | AddExercisePayload
   | DeleteExercisePayload
+  | CancelExercisePayload
   | Record<string, never>;
 
 export type QueueMutation = {
@@ -411,6 +418,42 @@ export async function enqueueDeleteExerciseMutation(date: string, exerciseId: st
   dispatchSyncEvent("idle", await getOfflineQueuePendingCount());
 }
 
+export async function enqueueCancelExerciseMutation(
+  date: string,
+  exerciseId: string,
+  cancelReasonCode: number,
+): Promise<void> {
+  if (!canUseIndexedDb()) {
+    return;
+  }
+
+  const queue = await getAllQueueMutations();
+  const key = mutationKey("cancel_exercise", `${date}:${exerciseId}`);
+  const existing = queue.find((item) => mutationKey(item.type, item.targetId) === key);
+  const now = Date.now();
+
+  const next: QueueMutation = existing
+    ? {
+        ...existing,
+        payload: { cancelled: true, cancelReasonCode },
+        updatedAt: now,
+      }
+    : {
+        id: nextMutationId(),
+        type: "cancel_exercise",
+        targetId: `${date}:${exerciseId}`,
+        endpoint: `/api/workouts/by-date/${date}/exercises?exerciseId=${encodeURIComponent(exerciseId)}`,
+        method: "PATCH",
+        payload: { cancelled: true, cancelReasonCode },
+        createdAt: now,
+        updatedAt: now,
+        attempts: 0,
+      };
+
+  await putQueueMutation(next);
+  dispatchSyncEvent("idle", await getOfflineQueuePendingCount());
+}
+
 export async function acknowledgeSetMutationFields(
   setId: string,
   keys: Array<keyof SetUpdatePayload>,
@@ -703,7 +746,7 @@ export async function hasPendingMutationsForDay(
     if (mutation.type === 'set_update') {
       return setIdSet.has(mutation.targetId);
     }
-    if (mutation.type === 'reorder_exercises' || mutation.type === 'add_exercise_to_day' || mutation.type === 'delete_exercise_from_day') {
+    if (mutation.type === 'reorder_exercises' || mutation.type === 'add_exercise_to_day' || mutation.type === 'delete_exercise_from_day' || mutation.type === 'cancel_exercise') {
       return mutation.targetId.startsWith(`${date}:`) || mutation.targetId === date;
     }
     return sessionIdSet.has(mutation.targetId);

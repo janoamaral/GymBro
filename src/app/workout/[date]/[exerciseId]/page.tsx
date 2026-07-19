@@ -39,6 +39,8 @@ interface Set {
   durationSeconds: number | null;
   distanceMeters: number | null;
   isDone: boolean;
+  isCancelled?: boolean;
+  cancelReasonCode?: number | null;
   setFeelingScore: number | null;
   rpe: number | null;
   rir: number | null;

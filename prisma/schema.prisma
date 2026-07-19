@@ -102,6 +102,8 @@ model ExerciseSet {
   rpe                Int?           // Escala 1-10
   rir                Int?           // Reps in Reserve, 0-5
   restSeconds        Int?           // ponytail: actual rest before this set, from rest timer
+  isCancelled        Boolean        @default(false)
+  cancelReasonCode   Int?           // 1 = Cansancio, 2 = Falta de tiempo, 3 = Otro
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   session            WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)

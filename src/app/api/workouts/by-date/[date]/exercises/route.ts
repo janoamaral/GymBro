@@ -64,6 +64,11 @@ const createExerciseSchema = z
     }
   });
 
+const cancelExerciseSchema = z.object({
+  cancelled: z.literal(true),
+  cancelReasonCode: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+});
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ date: string }> },
@@ -202,6 +207,76 @@ export async function POST(
     return NextResponse.json(
       {
         error: "FAILED_TO_CREATE_EXERCISE",
+        detail: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ date: string }> },
+) {
+  try {
+    const user = await getOrCreateCurrentUser();
+    const { date } = await context.params;
+    const { searchParams } = new URL(request.url);
+    const exerciseId = searchParams.get("exerciseId");
+
+    if (!exerciseId) {
+      return NextResponse.json({ error: "MISSING_EXERCISE_ID" }, { status: 400 });
+    }
+
+    const dateParts = parseIsoDateParts(date);
+    if (!dateParts) {
+      return NextResponse.json({ error: "INVALID_DATE_FORMAT" }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const payload = cancelExerciseSchema.parse(body);
+
+    const dayStart = new Date(Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day, 0, 0, 0, 0));
+    const dayEnd = new Date(Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day, 23, 59, 59, 999));
+
+    const sessions = await db.workoutSession.findMany({
+      where: {
+        userId: user.id,
+        startedAt: { gte: dayStart, lte: dayEnd },
+      },
+      select: { id: true },
+    });
+
+    if (sessions.length === 0) {
+      return NextResponse.json({ error: "SESSION_NOT_FOUND" }, { status: 404 });
+    }
+
+    const sessionIds = sessions.map((session) => session.id);
+
+    const result = await db.exerciseSet.updateMany({
+      where: {
+        sessionId: { in: sessionIds },
+        exerciseId,
+      },
+      data: {
+        isCancelled: true,
+        cancelReasonCode: payload.cancelReasonCode,
+      },
+    });
+
+    return NextResponse.json({ updated: result.count });
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: "INVALID_PAYLOAD", issues: error.issues }, { status: 400 });
+    }
+
+    return NextResponse.json(
+      {
+        error: "FAILED_TO_CANCEL_EXERCISE",
         detail: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
