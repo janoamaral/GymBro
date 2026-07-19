@@ -17,6 +17,7 @@ const updateSetSchema = z.object({
   setFeelingScore: z.number().int().min(1).max(5).nullable().optional(),
   rpe: z.number().int().min(1).max(10).nullable().optional(),
   rir: z.number().int().min(0).max(10).nullable().optional(),
+  restSeconds: z.number().int().min(0).max(3600).nullable().optional(),
 });
 
 export async function PATCH(
@@ -73,6 +74,7 @@ export async function PATCH(
         setFeelingScore: payload.setFeelingScore,
         rpe: payload.rpe,
         rir: payload.rir,
+        restSeconds: payload.restSeconds,
       },
       include: {
         exercise: true,

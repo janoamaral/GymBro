@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 interface RestTimerModalProps {
   readonly isOpen: boolean;
   readonly initialSeconds: number;
-  readonly onClose: () => void;
+  readonly onClose: (elapsedSeconds: number) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -24,7 +24,7 @@ export function RestTimerModal({ isOpen, initialSeconds, onClose }: RestTimerMod
 
 interface RestTimerModalContentProps {
   readonly initialSeconds: number;
-  readonly onClose: () => void;
+  readonly onClose: (elapsedSeconds: number) => void;
 }
 
 function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalContentProps) {
@@ -38,6 +38,7 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
   const alarmTimeoutIdsRef = useRef<number[]>([]);
   const addThirtyPopTimeoutsRef = useRef<number[]>([]);
   const addThirtyPopIdRef = useRef(0);
+  const extensionsCountRef = useRef(0);
 
   const playAlarm = () => {
     if (alarmPlayedRef.current) {
@@ -159,6 +160,7 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
 
   const handleAddThirty = () => {
     setRemaining((prev) => prev + 30);
+    extensionsCountRef.current += 1;
     if (isFinished) {
       setIsFinished(false);
       alarmPlayedRef.current = false;
@@ -172,6 +174,11 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
       );
     }, 1500);
     addThirtyPopTimeoutsRef.current.push(timeoutId);
+  };
+
+  const handleFinish = () => {
+    const elapsedSeconds = initialSeconds - remaining + 30 * extensionsCountRef.current;
+    onClose(Math.max(0, elapsedSeconds));
   };
 
   return (
@@ -203,7 +210,7 @@ function RestTimerModalContent({ initialSeconds, onClose }: RestTimerModalConten
             +30 sec
           </button>
         </div>
-        <button type="button" onClick={onClose} className="rest-timer-btn-finish">
+        <button type="button" onClick={handleFinish} className="rest-timer-btn-finish">
           Finish
         </button>
       </div>

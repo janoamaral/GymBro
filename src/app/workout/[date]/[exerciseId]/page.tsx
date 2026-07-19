@@ -42,6 +42,7 @@ interface Set {
   setFeelingScore: number | null;
   rpe: number | null;
   rir: number | null;
+  restSeconds: number | null;
   exercise: {
     id: string;
     name: string;
@@ -52,7 +53,7 @@ interface SessionWithSets {
   sets: Set[];
 }
 
-type SetServerSnapshot = Pick<Set, 'repsTarget' | 'targetWeight' | 'durationSeconds' | 'distanceMeters' | 'setFeelingScore' | 'rpe' | 'rir' | 'isDone' | 'unit'>;
+type SetServerSnapshot = Pick<Set, 'repsTarget' | 'targetWeight' | 'durationSeconds' | 'distanceMeters' | 'setFeelingScore' | 'rpe' | 'rir' | 'restSeconds' | 'isDone' | 'unit'>;
 type SetSyncState = {
   metricsQueued: boolean;
   metricsInFlight: boolean;
@@ -177,6 +178,7 @@ export default function ExerciseDetailPage() {
         setFeelingScore: set.setFeelingScore,
         rpe: set.rpe,
         rir: set.rir,
+        restSeconds: set.restSeconds,
         isDone: set.isDone,
         unit: set.unit,
       };
@@ -655,6 +657,68 @@ export default function ExerciseDetailPage() {
     }
   };
 
+  const handleRestTimerClose = async (elapsedSeconds: number) => {
+    setShowRestTimer(false);
+    setSyncError('');
+
+    const nextSet = sets.find((set) => !set.isDone);
+    if (!nextSet) {
+      return;
+    }
+
+    const setId = nextSet.id;
+    const sessionId = nextSet.sessionId;
+    const payload = { restSeconds: elapsedSeconds };
+
+    setSets((currentSets) =>
+      currentSets.map((set) => (set.id === setId ? { ...set, restSeconds: elapsedSeconds } : set))
+    );
+    void patchCachedSetsInDay(date, [{ id: setId, restSeconds: elapsedSeconds }]);
+
+    const confirmed = confirmedSetValuesRef.current[setId];
+    confirmedSetValuesRef.current[setId] = {
+      ...confirmed,
+      ...payload,
+    };
+
+    try {
+      const response = await fetch(`/api/workouts/${sessionId}/sets/${setId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        if (response.status === 429 || response.status >= 500) {
+          await enqueueSetMutation(setId, sessionId, payload);
+          setSyncError('Sincronización pendiente. Se reintentará automáticamente.');
+          return;
+        }
+
+        const data = (await response.json().catch(() => null)) as { error?: string; detail?: string } | null;
+        throw new Error(data?.detail ?? data?.error ?? 'FAILED_TO_UPDATE_SET');
+      }
+
+      await acknowledgeSetMutationFields(setId, ['restSeconds']);
+    } catch (err) {
+      if (!navigator.onLine || err instanceof TypeError) {
+        await enqueueSetMutation(setId, sessionId, payload);
+        setSyncError('Guardado offline. Se sincronizará cuando vuelva internet.');
+      } else {
+        console.error('Failed to update rest seconds:', err);
+        const confirmedBefore = confirmedSetValuesRef.current[setId];
+        if (confirmedBefore) {
+          setSets((currentSets) =>
+            currentSets.map((set) =>
+              set.id === setId ? { ...set, restSeconds: confirmedBefore.restSeconds ?? null } : set
+            )
+          );
+        }
+        setSyncError('No se pudo guardar el tiempo de descanso. Reintentá.');
+      }
+    }
+  };
+
   const handleOpenCalculator = (weight: number, unit: 'kg' | 'lb') => {
     setCalculatorWeight(weight);
     setCalculatorUnit(unit);
@@ -731,6 +795,7 @@ export default function ExerciseDetailPage() {
       setFeelingScore: set.setFeelingScore,
       rpe: set.rpe,
       rir: set.rir,
+      restSeconds: set.restSeconds,
       isDone: set.isDone,
       unit: set.unit,
     };
@@ -1107,6 +1172,15 @@ export default function ExerciseDetailPage() {
                   </div>
                 )}
 
+                {set.restSeconds !== null && set.restSeconds !== undefined && (
+                  <div className={isNext ? 'mt-2 flex flex-wrap gap-2 text-xs font-semibold text-[#101010]' : 'mt-2 flex flex-wrap gap-2 text-xs font-semibold text-gray-300'}>
+                    <span className={isNext ? 'rounded-full bg-[#101010]/10 px-2 py-1' : 'rounded-full bg-white/5 px-2 py-1'}>
+                      <Timer size={12} className="inline-block mr-1" />
+                      {set.restSeconds}s rest
+                    </span>
+                  </div>
+                )}
+
                 {/* Botón de calcular pesos */}
                 <div className="mt-4 flex justify-start gap-2">
                   <button
@@ -1161,7 +1235,7 @@ export default function ExerciseDetailPage() {
       <RestTimerModal
         isOpen={showRestTimer}
         initialSeconds={restTimerSeconds}
-        onClose={() => setShowRestTimer(false)}
+        onClose={handleRestTimerClose}
       />
 
       <HangTimerModal

@@ -37,6 +37,7 @@ type SetUpdatePayload = {
   durationSeconds?: number | null;
   distanceMeters?: number | null;
   unit?: "kg" | "lb";
+  restSeconds?: number | null;
 };
 
 type QueueMutationPayload =

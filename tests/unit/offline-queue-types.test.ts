@@ -38,7 +38,7 @@ describe('offline queue types', () => {
       attempts: 0,
     };
 
-    assert.equal(mutation.payload.unit, 'lb');
+    assert.equal((mutation.payload as { unit?: string }).unit, 'lb');
   });
 
   it('supports reorder payload shape', () => {
