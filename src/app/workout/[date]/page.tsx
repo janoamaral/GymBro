@@ -532,37 +532,35 @@ export default function WorkoutDayPage() {
       return;
     }
 
-    const firstSet = exercise.sets[0];
-    const measure =
-      firstSet.durationSeconds != null && firstSet.durationSeconds > 0
-        ? 'time'
-        : firstSet.distanceMeters != null && Number(firstSet.distanceMeters) > 0
-          ? 'distance'
-          : 'reps';
-
-    const targetWeight = firstSet.bodyweight ? 0 : Number(firstSet.weight);
-    const payload: {
-      exerciseName?: string;
-      repsTarget?: number;
+    const setsPayload: Array<{
       targetWeight: number;
       unit: 'kg' | 'lb';
+      repsTarget?: number;
       durationSeconds?: number;
       distanceMeters?: number;
-    } = {
-      targetWeight,
-      unit: exercise.unit ?? 'kg',
-    };
+    }> = exercise.sets.map((set) => {
+      const targetWeight = set.bodyweight ? 0 : Number(set.weight);
+      const base = {
+        targetWeight,
+        unit: exercise.unit ?? 'kg',
+      };
 
-    if (exercise.name) {
-      payload.exerciseName = exercise.name;
-    }
-    if (measure === 'reps') {
-      payload.repsTarget = Number(firstSet.reps ?? 1);
-    } else if (measure === 'time') {
-      payload.durationSeconds = Number(firstSet.durationSeconds);
-    } else if (measure === 'distance') {
-      payload.distanceMeters = Number(firstSet.distanceMeters);
-    }
+      if (set.durationSeconds != null && Number(set.durationSeconds) > 0) {
+        return { ...base, durationSeconds: Number(set.durationSeconds) };
+      }
+
+      if (set.distanceMeters != null && Number(set.distanceMeters) > 0) {
+        return { ...base, distanceMeters: Number(set.distanceMeters) };
+      }
+
+      return { ...base, repsTarget: Number(set.reps ?? 1) };
+    });
+
+    const payload = {
+      exerciseName: exercise.name || undefined,
+      unit: exercise.unit ?? 'kg',
+      sets: setsPayload,
+    };
 
     setAddExerciseError('');
     setAddingExercise(true);
@@ -584,23 +582,23 @@ export default function WorkoutDayPage() {
       }
 
       const data = (await response.json()) as {
-        set: Set & { exercise: { id: string; name: string } };
+        sets: Array<Set & { exercise: { id: string; name: string } }>;
       };
 
-      const incomingSet: Set = {
-        id: data.set.id,
-        exerciseOrder: data.set.exerciseOrder,
-        setNumber: data.set.setNumber,
-        repsTarget: data.set.repsTarget,
-        targetWeight: Number(data.set.targetWeight),
-        unit: data.set.unit,
-        isDone: data.set.isDone,
-        exercise: data.set.exercise,
-      };
+      const incomingSets: Set[] = data.sets.map((set) => ({
+        id: set.id,
+        exerciseOrder: set.exerciseOrder,
+        setNumber: set.setNumber,
+        repsTarget: set.repsTarget,
+        targetWeight: Number(set.targetWeight),
+        unit: set.unit,
+        isDone: set.isDone,
+        exercise: set.exercise,
+      }));
 
       const nextSessions = sessions.length > 0
         ? sessions.map((session, index) =>
-            index === 0 ? { ...session, sets: [...session.sets, incomingSet] } : session,
+            index === 0 ? { ...session, sets: [...session.sets, ...incomingSets] } : session,
           )
         : [
             {
@@ -608,7 +606,7 @@ export default function WorkoutDayPage() {
               title: `Workout ${date}`,
               startedAt: date,
               reschedule: null,
-              sets: [incomingSet],
+              sets: incomingSets,
             },
           ];
 
@@ -618,22 +616,26 @@ export default function WorkoutDayPage() {
       setShowAddExerciseModal(false);
     } catch (err) {
       if (!navigator.onLine || err instanceof TypeError) {
-        // Offline: sintetizo set temporal y encolo. El próximo fetch reconciliará.
-        const tempSetId = `temp-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
-        const tempExerciseId = `temp-${globalThis.crypto?.randomUUID?.() ?? Date.now() + 1}`;
-        const provisional: Set = {
-          id: tempSetId,
-          exerciseOrder: exercises.length > 0 ? Math.max(...exercises.map((e) => e.exerciseOrder)) + 1 : 0,
-          setNumber: 1,
-          repsTarget: payload.repsTarget ?? 1,
-          targetWeight,
-          unit: payload.unit,
+        // Offline: sintetizo sets temporales y encolo. El próximo fetch reconciliará.
+        const tempExerciseId = `temp-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
+        const maxSetNumber = sessions.length > 0
+          ? Math.max(0, ...sessions.flatMap((s) => s.sets.map((set) => set.setNumber)))
+          : 0;
+        const exerciseOrder = exercises.length > 0 ? Math.max(...exercises.map((e) => e.exerciseOrder)) + 1 : 0;
+
+        const provisionalSets: Set[] = setsPayload.map((set, index) => ({
+          id: `temp-${globalThis.crypto?.randomUUID?.() ?? Date.now()}-${index}`,
+          exerciseOrder,
+          setNumber: maxSetNumber + index + 1,
+          repsTarget: set.repsTarget ?? 1,
+          targetWeight: set.targetWeight,
+          unit: set.unit,
           exercise: { id: tempExerciseId, name: exercise.name },
-        };
+        }));
 
         const nextSessions = sessions.length > 0
           ? sessions.map((session, index) =>
-              index === 0 ? { ...session, sets: [...session.sets, provisional] } : session,
+              index === 0 ? { ...session, sets: [...session.sets, ...provisionalSets] } : session,
             )
           : [
               {
@@ -641,7 +643,7 @@ export default function WorkoutDayPage() {
                 title: `Workout ${date}`,
                 startedAt: date,
                 reschedule: null,
-                sets: [provisional],
+                sets: provisionalSets,
               },
             ];
 
