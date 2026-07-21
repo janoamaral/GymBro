@@ -15,15 +15,20 @@ type QueueMutationType =
   | "delete_exercise_from_day"
   | "cancel_exercise";
 
-type AddExercisePayload = {
-  exerciseId?: string;
-  exerciseName?: string;
+type SetInputPayload = {
   repsTarget?: number;
   targetWeight: number;
   unit: "kg" | "lb";
-  liftId?: "SQ" | "DL" | "BP";
   durationSeconds?: number;
   distanceMeters?: number;
+};
+
+type AddExercisePayload = {
+  exerciseId?: string;
+  exerciseName?: string;
+  unit: "kg" | "lb";
+  liftId?: "SQ" | "DL" | "BP";
+  sets: SetInputPayload[];
 };
 
 type DeleteExercisePayload = Record<string, never>;

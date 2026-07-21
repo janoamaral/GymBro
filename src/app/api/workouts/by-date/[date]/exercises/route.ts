@@ -31,26 +31,15 @@ function isExerciseOrderUnsupported(error: unknown): boolean {
   return /Unknown argument `exerciseOrder`/i.test(error.message);
 }
 
-const createExerciseSchema = z
+const setInputSchema = z
   .object({
-    exerciseId: z.string().min(1).optional(),
-    exerciseName: z.string().min(1).max(120).optional(),
     repsTarget: z.number().int().min(1).max(1000).optional(),
     targetWeight: z.number().min(0),
     unit: z.enum(["kg", "lb"]),
-    liftId: z.enum(["SQ", "DL", "BP"]).optional(),
     durationSeconds: z.number().int().min(1).max(86400).optional(),
     distanceMeters: z.number().min(0.1).max(100000).optional(),
   })
   .superRefine((value, ctx) => {
-    if (!value.exerciseId && !value.exerciseName) {
-      ctx.addIssue({
-        code: "custom",
-        message: "exerciseId or exerciseName is required",
-        path: [],
-      });
-    }
-
     const measures = [value.repsTarget, value.durationSeconds, value.distanceMeters].filter(
       (m) => m !== undefined,
     ).length;
@@ -59,6 +48,24 @@ const createExerciseSchema = z
       ctx.addIssue({
         code: "custom",
         message: "only one of repsTarget / durationSeconds / distanceMeters is allowed",
+        path: [],
+      });
+    }
+  });
+
+const createExerciseSchema = z
+  .object({
+    exerciseId: z.string().min(1).optional(),
+    exerciseName: z.string().min(1).max(120).optional(),
+    unit: z.enum(["kg", "lb"]),
+    liftId: z.enum(["SQ", "DL", "BP"]).optional(),
+    sets: z.array(setInputSchema).min(1),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.exerciseId && !value.exerciseName) {
+      ctx.addIssue({
+        code: "custom",
+        message: "exerciseId or exerciseName is required",
         path: [],
       });
     }
@@ -133,6 +140,10 @@ export async function POST(
       return NextResponse.json({ error: "EXERCISE_REQUIRED" }, { status: 400 });
     }
 
+    if (!session) {
+      return NextResponse.json({ error: "SESSION_REQUIRED" }, { status: 500 });
+    }
+
     // exerciseOrder: MAX+1 sobre todas las series del día.
     let exerciseOrder = 0;
     try {
@@ -152,49 +163,49 @@ export async function POST(
       exerciseOrder = 0;
     }
 
-    const existingSetsCount = await db.exerciseSet.count({ where: { sessionId: session.id } });
-    const repsTarget = payload.repsTarget ?? 1;
-    const targetWeight = payload.targetWeight;
+    const sessionId = session.id;
+    const finalExerciseId = exerciseId;
+    const existingSetsCount = await db.exerciseSet.count({ where: { sessionId } });
 
-    let createdSet;
+    const buildSetData = (index: number, set: z.infer<typeof setInputSchema>) => ({
+      sessionId,
+      exerciseId: finalExerciseId,
+      exerciseOrder,
+      liftId: payload.liftId,
+      setNumber: existingSetsCount + index + 1,
+      repsTarget: set.repsTarget ?? 1,
+      targetWeight: set.targetWeight,
+      unit: set.unit,
+      durationSeconds: set.durationSeconds,
+      distanceMeters: set.distanceMeters,
+    });
+
+    let createdSets: Awaited<ReturnType<typeof db.exerciseSet.create>>[];
     try {
-      createdSet = await db.exerciseSet.create({
-        data: {
-          sessionId: session.id,
-          exerciseId,
-          exerciseOrder,
-          liftId: payload.liftId,
-          setNumber: existingSetsCount + 1,
-          repsTarget,
-          targetWeight,
-          unit: payload.unit,
-          durationSeconds: payload.durationSeconds,
-          distanceMeters: payload.distanceMeters,
-        },
-        include: { exercise: true },
-      });
+      createdSets = await db.$transaction(
+        payload.sets.map((set, index) =>
+          db.exerciseSet.create({
+            data: buildSetData(index, set),
+            include: { exercise: true },
+          })
+        )
+      );
     } catch (error) {
       if (!isExerciseOrderUnsupported(error)) {
         throw error;
       }
 
-      createdSet = await db.exerciseSet.create({
-        data: {
-          sessionId: session.id,
-          exerciseId,
-          liftId: payload.liftId,
-          setNumber: existingSetsCount + 1,
-          repsTarget,
-          targetWeight,
-          unit: payload.unit,
-          durationSeconds: payload.durationSeconds,
-          distanceMeters: payload.distanceMeters,
-        },
-        include: { exercise: true },
-      });
+      createdSets = await db.$transaction(
+        payload.sets.map((set, index) =>
+          db.exerciseSet.create({
+            data: { ...buildSetData(index, set), exerciseOrder: undefined },
+            include: { exercise: true },
+          })
+        )
+      );
     }
 
-    return NextResponse.json({ set: createdSet, exercise: createdSet.exercise }, { status: 201 });
+    return NextResponse.json({ sets: createdSets }, { status: 201 });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
