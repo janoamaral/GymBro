@@ -7,6 +7,7 @@ import { logAmrap } from "@/lib/training/531";
 
 const updateSetSchema = z.object({
   repsDone: z.number().int().min(1).max(100).nullable().optional(),
+  weightDone: z.number().min(0).nullable().optional(),
   repsTarget: z.number().int().min(1).max(1000).optional(),
   targetWeight: z.number().min(0).optional(),
   durationSeconds: z.number().int().min(1).max(86400).nullable().optional(),
@@ -62,6 +63,7 @@ export async function PATCH(
       where: { id: setId },
       data: {
         repsDone: payload.repsDone,
+        weightDone: payload.weightDone,
         repsTarget: payload.repsTarget,
         targetWeight: payload.targetWeight,
         durationSeconds: payload.durationSeconds,
