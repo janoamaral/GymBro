@@ -44,6 +44,8 @@ type SetUpdatePayload = {
   rir?: number | null;
   isDone?: boolean;
   repsTarget?: number;
+  repsDone?: number | null;
+  weightDone?: number | null;
   targetWeight?: number;
   durationSeconds?: number | null;
   distanceMeters?: number | null;

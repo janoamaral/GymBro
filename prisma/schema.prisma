@@ -86,6 +86,7 @@ model ExerciseSet {
   setNumber          Int
   repsTarget         Int
   repsDone           Int?
+  weightDone         Decimal?
   percentage         Decimal?
   isAmrap            Boolean        @default(false)
   targetWeight       Decimal

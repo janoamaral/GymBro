@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calculator, Dumbbell, Pencil, Timer } from 'lucide-react';
+import { ArrowLeft, Calculator, ClipboardCheck, Dumbbell, Pencil, Timer } from 'lucide-react';
 import { PlateCalculatorModal } from '@/components/plate-calculator-modal';
 import { RestTimerModal } from '@/components/rest-timer-modal';
 import { HangTimerModal } from '@/components/hang-timer-modal';
@@ -45,6 +45,8 @@ interface Set {
   rpe: number | null;
   rir: number | null;
   restSeconds: number | null;
+  repsDone: number | null;
+  weightDone: number | null;
   exercise: {
     id: string;
     name: string;
@@ -55,7 +57,7 @@ interface SessionWithSets {
   sets: Set[];
 }
 
-type SetServerSnapshot = Pick<Set, 'repsTarget' | 'targetWeight' | 'durationSeconds' | 'distanceMeters' | 'setFeelingScore' | 'rpe' | 'rir' | 'restSeconds' | 'isDone' | 'unit'>;
+type SetServerSnapshot = Pick<Set, 'repsTarget' | 'targetWeight' | 'durationSeconds' | 'distanceMeters' | 'setFeelingScore' | 'rpe' | 'rir' | 'restSeconds' | 'isDone' | 'unit' | 'repsDone' | 'weightDone'>;
 type SetSyncState = {
   metricsQueued: boolean;
   metricsInFlight: boolean;
@@ -80,6 +82,17 @@ function formatSetLine(set: Set): string {
   const weight = Number(set.targetWeight);
   const weightLabel = weight === 0 ? 'BW' : `${weight} ${set.unit}`;
   return `${volume} @ ${weightLabel}`;
+}
+
+function formatCompletedLine(set: Set): string {
+  const reps = set.repsDone ?? 0;
+  const w = Number(set.weightDone ?? 0);
+  const weightLabel = w === 0 ? 'BW' : `${w} ${set.unit}`;
+  return `Hecho: ${reps} × ${weightLabel}`;
+}
+
+function completedMatchesTarget(set: Set): boolean {
+  return set.repsDone === set.repsTarget && Number(set.weightDone) === Number(set.targetWeight);
 }
 
 export default function ExerciseDetailPage() {
@@ -120,11 +133,18 @@ export default function ExerciseDetailPage() {
   const [editUnit, setEditUnit] = useState<WeightUnit>('kg');
   const [isEditSaving, setIsEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
+  const [editingCompletedSetId, setEditingCompletedSetId] = useState<string | null>(null);
+  const [completedReps, setCompletedReps] = useState('');
+  const [completedWeight, setCompletedWeight] = useState('');
+  const [completedUnit, setCompletedUnit] = useState<WeightUnit>('kg');
+  const [completedBodyweight, setCompletedBodyweight] = useState(false);
+  const [isCompletedSaving, setIsCompletedSaving] = useState(false);
+  const [completedError, setCompletedError] = useState('');
   const metricsDebounceTimersRef = useRef<Record<string, number>>({});
   const completionAnimationTimersRef = useRef<Record<string, number>>({});
   const exerciseCompletionTimerRef = useRef<number | null>(null);
   const pendingMetricsUpdatesRef = useRef<
-    Record<string, { sessionId: string; updates: Partial<Pick<Set, 'setFeelingScore' | 'rpe' | 'rir'>> }>
+    Record<string, { sessionId: string; updates: Partial<Pick<Set, 'setFeelingScore' | 'rpe' | 'rir' | 'repsDone' | 'weightDone'>> }>
   >({});
   const doneDebounceTimersRef = useRef<Record<string, number>>({});
   const pendingDoneUpdatesRef = useRef<Record<string, { sessionId: string; isDone: boolean }>>({});
@@ -183,6 +203,8 @@ export default function ExerciseDetailPage() {
         restSeconds: set.restSeconds,
         isDone: set.isDone,
         unit: set.unit,
+        repsDone: set.repsDone,
+        weightDone: set.weightDone,
       };
     });
   };
@@ -450,7 +472,7 @@ export default function ExerciseDetailPage() {
       };
       await acknowledgeSetMutationFields(
         setId,
-        Object.keys(pending.updates) as Array<'setFeelingScore' | 'rpe' | 'rir'>
+        Object.keys(pending.updates) as Array<'setFeelingScore' | 'rpe' | 'rir' | 'repsDone' | 'weightDone'>
       );
     } catch (err) {
       if (!navigator.onLine || err instanceof TypeError) {
@@ -468,6 +490,8 @@ export default function ExerciseDetailPage() {
                     setFeelingScore: confirmed.setFeelingScore,
                     rpe: confirmed.rpe,
                     rir: confirmed.rir,
+                    repsDone: confirmed.repsDone,
+                    weightDone: confirmed.weightDone,
                   }
                 : set
             )
@@ -483,7 +507,7 @@ export default function ExerciseDetailPage() {
   const scheduleSetMetricsUpdate = (
     setId: string,
     sessionId: string,
-    updates: Partial<Pick<Set, 'setFeelingScore' | 'rpe' | 'rir'>>
+    updates: Partial<Pick<Set, 'setFeelingScore' | 'rpe' | 'rir' | 'repsDone' | 'weightDone'>>
   ) => {
     updateSetSyncFlag(setId, 'metricsQueued', true);
     const pendingForSet = pendingMetricsUpdatesRef.current[setId];
@@ -647,15 +671,47 @@ export default function ExerciseDetailPage() {
 
     const nextRir = nextIsDone && set.rir === null ? 2 : set.rir;
 
+    // Prefill valores completados desde el target al marcar done (solo si estaban vacios).
+    const shouldPrefillDone = nextIsDone && set.repsDone === null && set.weightDone === null;
+    const nextRepsDone = shouldPrefillDone ? set.repsTarget : set.repsDone;
+    const nextWeightDone = shouldPrefillDone ? Number(set.targetWeight) : set.weightDone;
+
     setSets((currentSets) =>
       currentSets.map((s) =>
-        s.id === setId ? { ...s, isDone: nextIsDone, rir: nextRir } : s
+        s.id === setId
+          ? {
+              ...s,
+              isDone: nextIsDone,
+              rir: nextRir,
+              ...(shouldPrefillDone ? { repsDone: nextRepsDone, weightDone: nextWeightDone } : {}),
+            }
+          : s
       )
     );
-    void patchCachedSetsInDay(date, [{ id: setId, isDone: nextIsDone, ...(nextRir !== set.rir ? { rir: nextRir } : {}) }]);
+
+    const cachePatch: Array<{ id: string } & Record<string, unknown>> = [{ id: setId, isDone: nextIsDone }];
+    if (nextRir !== set.rir) {
+      cachePatch.push({ id: setId, rir: nextRir });
+    }
+    if (shouldPrefillDone) {
+      cachePatch.push({ id: setId, repsDone: nextRepsDone, weightDone: nextWeightDone });
+    }
+    void patchCachedSetsInDay(date, cachePatch);
+
     scheduleSetDoneUpdate(setId, set.sessionId, nextIsDone);
     if (nextRir !== set.rir) {
       scheduleSetMetricsUpdate(setId, set.sessionId, { rir: nextRir });
+    }
+    if (shouldPrefillDone) {
+      const confirmed = confirmedSetValuesRef.current[setId];
+      if (confirmed) {
+        confirmedSetValuesRef.current[setId] = {
+          ...confirmed,
+          repsDone: nextRepsDone,
+          weightDone: nextWeightDone,
+        };
+      }
+      scheduleSetMetricsUpdate(setId, set.sessionId, { repsDone: nextRepsDone, weightDone: nextWeightDone });
     }
   };
 
@@ -800,6 +856,8 @@ export default function ExerciseDetailPage() {
       restSeconds: set.restSeconds,
       isDone: set.isDone,
       unit: set.unit,
+      repsDone: set.repsDone,
+      weightDone: set.weightDone,
     };
 
     setEditError('');
@@ -895,6 +953,141 @@ export default function ExerciseDetailPage() {
       }
     } finally {
       setIsEditSaving(false);
+    }
+  };
+
+  const handleOpenCompleted = (set: Set) => {
+    setCompletedError('');
+    setEditingCompletedSetId(set.id);
+    setCompletedReps(String(set.repsDone ?? set.repsTarget));
+    setCompletedWeight(set.weightDone != null ? String(set.weightDone) : String(Number(set.targetWeight)));
+    setCompletedBodyweight(Number(set.weightDone ?? set.targetWeight) === 0);
+    setCompletedUnit((set.unit === 'lb' ? 'lb' : 'kg') as WeightUnit);
+  };
+
+  const handleCloseCompleted = () => {
+    if (isCompletedSaving) {
+      return;
+    }
+    setEditingCompletedSetId(null);
+    setCompletedError('');
+  };
+
+  const handleSaveCompleted = async () => {
+    const set = sets.find((item) => item.id === editingCompletedSetId);
+    if (!set) {
+      return;
+    }
+
+    const nextRepsDone = Number.parseInt(completedReps, 10);
+    if (!Number.isInteger(nextRepsDone) || nextRepsDone < 0 || nextRepsDone > 1000) {
+      setCompletedError('Las repeticiones deben estar entre 0 y 1000.');
+      return;
+    }
+
+    let nextWeightDone = completedBodyweight ? 0 : Number.parseFloat(completedWeight);
+    if (!completedBodyweight && (!Number.isFinite(nextWeightDone) || nextWeightDone < 0)) {
+      setCompletedError('El peso debe ser mayor o igual a 0.');
+      return;
+    }
+    if (completedBodyweight) {
+      nextWeightDone = 0;
+    }
+
+    setCompletedError('');
+    setIsCompletedSaving(true);
+
+    setSets((currentSets) =>
+      currentSets.map((s) =>
+        s.id === set.id
+          ? { ...s, repsDone: nextRepsDone, weightDone: nextWeightDone, unit: completedUnit }
+          : s
+      )
+    );
+    void patchCachedSetsInDay(date, [
+      {
+        id: set.id,
+        repsDone: nextRepsDone,
+        weightDone: nextWeightDone,
+        unit: completedUnit,
+      },
+    ]);
+
+    const confirmedBefore = confirmedSetValuesRef.current[set.id] ?? {
+      repsTarget: set.repsTarget,
+      targetWeight: set.targetWeight,
+      durationSeconds: set.durationSeconds,
+      distanceMeters: set.distanceMeters,
+      setFeelingScore: set.setFeelingScore,
+      rpe: set.rpe,
+      rir: set.rir,
+      restSeconds: set.restSeconds,
+      isDone: set.isDone,
+      unit: set.unit,
+      repsDone: set.repsDone,
+      weightDone: set.weightDone,
+    };
+
+    const payload = {
+      repsDone: nextRepsDone,
+      weightDone: nextWeightDone,
+      unit: completedUnit,
+    };
+
+    const persistConfirmed = () => {
+      confirmedSetValuesRef.current[set.id] = {
+        ...confirmedBefore,
+        ...payload,
+      };
+    };
+
+    try {
+      const response = await fetch(`/api/workouts/${set.sessionId}/sets/${set.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        if (response.status === 429 || response.status >= 500) {
+          await enqueueSetMutation(set.id, set.sessionId, payload);
+          persistConfirmed();
+          setSyncError('Guardado offline. Se sincronizará cuando vuelva internet.');
+          setEditingCompletedSetId(null);
+          return;
+        }
+
+        const data = (await response.json().catch(() => null)) as { error?: string; detail?: string } | null;
+        throw new Error(data?.detail ?? data?.error ?? 'FAILED_TO_UPDATE_SET');
+      }
+
+      persistConfirmed();
+      await acknowledgeSetMutationFields(set.id, ['repsDone', 'weightDone', 'unit']);
+      setEditingCompletedSetId(null);
+    } catch (err) {
+      if (!navigator.onLine || err instanceof TypeError) {
+        await enqueueSetMutation(set.id, set.sessionId, payload);
+        persistConfirmed();
+        setSyncError('Guardado offline. Se sincronizará cuando vuelva internet.');
+        setEditingCompletedSetId(null);
+      } else {
+        console.error('Failed to update completed values:', err);
+        setSets((currentSets) =>
+          currentSets.map((s) =>
+            s.id === set.id
+              ? {
+                  ...s,
+                  repsDone: confirmedBefore.repsDone,
+                  weightDone: confirmedBefore.weightDone,
+                  unit: confirmedBefore.unit,
+                }
+              : s
+          )
+        );
+        setCompletedError('No se pudo guardar los valores completados. Reintentá.');
+      }
+    } finally {
+      setIsCompletedSaving(false);
     }
   };
 
@@ -1037,6 +1230,7 @@ export default function ExerciseDetailPage() {
   const nextSetIndex = sets.findIndex((set) => !set.isDone);
   const allSetsCompleted = sets.length > 0 && sets.every((set) => set.isDone);
   const editingSet = editingSetId ? sets.find((set) => set.id === editingSetId) ?? null : null;
+  const editingCompletedSet = editingCompletedSetId ? sets.find((set) => set.id === editingCompletedSetId) ?? null : null;
 
   return (
     <main className="app-canvas min-h-screen">
@@ -1129,6 +1323,17 @@ export default function ExerciseDetailPage() {
                         />
                       )}
                     </span>
+                    {set.repsDone !== null && set.weightDone !== null && (
+                      <span
+                        className={
+                          isNext
+                            ? `mt-1 block text-xs font-semibold ${completedMatchesTarget(set) ? 'text-[#101010]/60' : 'text-[#101010]'}`
+                            : `mt-1 block text-xs font-semibold ${completedMatchesTarget(set) ? 'text-gray-400' : 'text-[#d6ff43]'}`
+                        }
+                      >
+                        {formatCompletedLine(set)}
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     {(() => {
@@ -1203,6 +1408,17 @@ export default function ExerciseDetailPage() {
                   >
                     <Calculator size={18} />
                   </button>
+                  {set.isDone && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCompleted(set)}
+                      className={`set-icon-btn ${isNext ? 'set-icon-btn--next' : 'set-icon-btn--base'}`}
+                      title={`Valores completados · serie ${set.setNumber}`}
+                      aria-label={`Valores completados · serie ${set.setNumber}`}
+                    >
+                      <ClipboardCheck size={18} />
+                    </button>
+                  )}
                 </div>
 
                 {isSavingSet && (
@@ -1414,6 +1630,99 @@ export default function ExerciseDetailPage() {
                 className="btn-accent px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isEditSaving ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal isOpen={editingCompletedSet !== null} onClose={handleCloseCompleted} title={editingCompletedSet ? `Valores completados · Serie ${editingCompletedSet.setNumber}` : 'Valores completados'}>
+        {editingCompletedSet && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-300">
+              Registrá lo que realmente hiciste. Precargado con el target, editalo si fue distinto.
+            </p>
+
+            {completedError && (
+              <p className="text-xs font-semibold text-red-400">{completedError}</p>
+            )}
+
+            <label className="block space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                Reps completadas
+              </span>
+              <input
+                type="number"
+                min="0"
+                max="1000"
+                step="1"
+                inputMode="numeric"
+                value={completedReps}
+                onChange={(event) => setCompletedReps(event.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#d6ff43]/60"
+              />
+            </label>
+
+            <div className="block space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                Peso completado
+              </span>
+              {completedBodyweight ? (
+                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                  <span className="text-white">Peso corporal (BW)</span>
+                  <button
+                    type="button"
+                    onClick={() => setCompletedBodyweight(false)}
+                    className="text-xs px-3 py-1 rounded bg-white/5 text-gray-300 hover:bg-white/10"
+                  >
+                    Quitar BW
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    inputMode="decimal"
+                    value={completedWeight}
+                    onChange={(event) => setCompletedWeight(event.target.value)}
+                    className="flex-1 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#d6ff43]/60"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextUnit: WeightUnit = completedUnit === 'kg' ? 'lb' : 'kg';
+                      const current = Number.parseFloat(completedWeight);
+                      if (Number.isFinite(current) && current > 0) {
+                        setCompletedWeight(String(roundTo(convertWeight(current, completedUnit, nextUnit), 1)));
+                      }
+                      setCompletedUnit(nextUnit);
+                    }}
+                    className="px-3 py-3 rounded-xl border border-white/10 bg-white/5 text-xs font-semibold text-gray-300 hover:bg-white/10"
+                  >
+                    {completedUnit}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleCloseCompleted}
+                disabled={isCompletedSaving}
+                className="btn-dark px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCompleted}
+                disabled={isCompletedSaving}
+                className="btn-accent px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isCompletedSaving ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
           </div>
