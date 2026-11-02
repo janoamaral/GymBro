@@ -16,7 +16,7 @@ El sistema SHALL calcular una propuesta recalculada para una sesión 5/3/1 cuand
 - **THEN** el sistema usa los campos disponibles, omite los ausentes del promedio, y nunca lanza error; la propuesta degrada gracefulmente hacia `Sin cambios`
 
 ### Requirement: Clasificación del nivel de ajuste
-El sistema SHALL clasificar la propuesta en uno de cuatro niveles: `Sin cambios`, `Leve`, `Moderado`, `Agresivo`, aplicando las reglas de negocio (mejorando / justo / por debajo / fatiga alta) con umbrales definidos en un objeto `RECALC_THRESHOLDS` exportado y ajustable sin tocar la lógica.
+El sistema SHALL clasificar la propuesta en exactamente uno de cuatro niveles: `Sin cambios`, `Leve`, `Moderado`, `Agresivo`, aplicando las reglas de negocio (mejorando / justo / por debajo / fatiga alta) con umbrales definidos en un objeto `RECALC_THRESHOLDS` exportado y ajustable sin tocar la lógica. El motivo SHALL indicar la dirección del cambio sin crear niveles adicionales.
 
 #### Scenario: Usuario viene mejorando estable
 - **WHEN** `repPerformance > 1.05` AND `rirTrend ≥ 2` AND `blockFatigue < 0.1` AND `feelingTrend ≥ 3`
@@ -36,11 +36,11 @@ El sistema SHALL clasificar la propuesta en uno de cuatro niveles: `Sin cambios`
 
 #### Scenario: Usuario viene por debajo del objetivo
 - **WHEN** `repPerformance < 0.9`
-- **THEN** el nivel reduce `targetWeight` 5% y baja 1 set de backoff; el `level` se etiqueta `Por debajo`
+- **THEN** el nivel es `Moderado`, reduce `targetWeight` 5% y baja 1 set de backoff; el motivo indica que el atleta viene por debajo del objetivo
 
 #### Scenario: Fatiga alta del bloque
 - **WHEN** `blockFatigue > 0.25` OR `feelingTrend < 2`
-- **THEN** el nivel prioriza reducir volumen (quitar 1 set de backoff/accesorio) antes que intensidad, sin progresión de peso; el `level` se etiqueta `Conservador`
+- **THEN** el nivel es `Agresivo` y prioriza reducir volumen (quitar 1 set de backoff/accesorio) antes que intensidad, sin progresión de peso; si no hay backoff reduce 5% la carga
 
 ### Requirement: Motivo legible del ajuste
 Cada propuesta recalculada con nivel distinto de `Sin cambios` SHALL incluir un `reasons: string[]` legible que enumere las señales usadas (p.ej. "repPerformance 1.18 sobre objetivo", "rir medio 3.2", "fatiga del bloque 0.30"). Las propuestas `Sin cambios` SHALL incluir el motivo por el cual no se sugiere cambio (p.ej. "historial insuficiente", "cumplimiento justo").
@@ -54,7 +54,7 @@ Cada propuesta recalculada con nivel distinto de `Sin cambios` SHALL incluir un 
 - **THEN** `reasons` contiene `"historial insuficiente"` (o equivalente legible)
 
 ### Requirement: Conservación del plan original
-El sistema MUST persistir el plan generado por `generate531Session`/`plan531Week` como **plan original** inmutable por sesión. Al aceptar una propuesta recalculada, el sistema SHALL conservar el snapshot original (sesión espejo con `title` sufijo ` (original)` o `ExerciseSet` marcado `isOriginalPlan=true`) de forma que siempre pueda recuperarse la versión base.
+El sistema MUST persistir el plan generado por `generate531Session`/`plan531Week` como **plan original** inmutable por sesión. Al aceptar o rechazar una propuesta recalculada, el sistema SHALL conservar los snapshots original y sugerido en `WorkoutSession.originalPlan` y `WorkoutSession.recalculatedPlan`.
 
 #### Scenario: Plan original persistido al crear el ciclo
 - **WHEN** se ejecuta `POST /api/plan/new-cycle` (o `/monthly`, `/generate`)
@@ -62,7 +62,7 @@ El sistema MUST persistir el plan generado por `generate531Session`/`plan531Week
 
 #### Scenario: Aceptar propuesta no destruye el original
 - **WHEN** el usuario acepta una propuesta recalculada y se sobrescriben `targetWeight`/`repsTarget`/`percentage` en los `ExerciseSet` de la sesión
-- **THEN** el snapshot original previo queda conservado (sesión espejo o `ExerciseSet` con `isOriginalPlan=true`) y es recuperable
+- **THEN** el snapshot original previo queda conservado en `originalPlan`, la sugerencia en `recalculatedPlan`, y ambas versiones son recuperables
 
 ### Requirement: Recálculo funciona offline
 El sistema SHALL permitir calcular la propuesta recalculada con los sets disponibles en el cache offline (`getCachedWorkoutDay`) cuando no hay conexión, y el resultado se sincronizará al reconectar igual que el resto de las mutaciones del día.
@@ -72,8 +72,8 @@ El sistema SHALL permitir calcular la propuesta recalculada con los sets disponi
 - **THEN** el cliente calcula la propuesta con los datos cacheados y muestra el banner; al reconectar, el endpoint de recálculo refresca la propuesta con datos de servidor
 
 ### Requirement: Esquema mínimo y no destructivo
-La extensión del esquema MUST ser aditiva y nullable/default: `WorkoutSession.recalculationVersion Int?` (null = sin propuesta, 0 = original elegida, 1 = recalc elegida), `WorkoutSession.recalcReason String?`, y `ExerciseSet.isOriginalPlan Boolean @default(false)`. No se renombran ni eliminan campos existentes.
+La extensión del esquema MUST ser aditiva y nullable/default: `WorkoutSession.recalculationVersion Int?` (null = sin propuesta, 0 = original elegida, 1 = recalc elegida), `WorkoutSession.recalcReason String?`, `WorkoutSession.originalPlan Json?` y `WorkoutSession.recalculatedPlan Json?`. No se renombran ni eliminan campos existentes.
 
 #### Scenario: Migración aditiva
 - **WHEN** se aplica la migración
-- **THEN** todas las sesiones existentes quedan con `recalculationVersion = null`, `recalcReason = null`, y los `ExerciseSet` existentes con `isOriginalPlan = false`, sin pérdida de datos
+- **THEN** todas las sesiones existentes quedan con los cuatro campos nuevos en `null`, sin pérdida de datos

@@ -8,17 +8,22 @@ import { Modal } from '@/components/ui/modal';
 import { FullscreenLoader } from '@/components/ui/fullscreen-loader';
 import { ExerciseFormModal, type Exercise as PlanExercise } from '@/components/plan-wizard/exercise-form-modal';
 import { LIFT_THEME, isLiftMarker, type LiftMarker } from '@/components/lift-theme';
+import { RecalcBanner, type RecalculationView } from '@/components/recalc-banner';
 import { fetchJsonWithInFlightDedup } from '@/lib/fetch-json-with-in-flight-dedup';
 import {
   cacheWorkoutDay,
+  cacheResource,
   clearCachedWorkoutDay,
+  clearCachedResource,
   enqueueAddExerciseMutation,
   enqueueCancelExerciseMutation,
   enqueueDeleteExerciseMutation,
   enqueueDeleteWorkoutMutation,
   enqueueReorderMutation,
+  enqueueRecalculationDecision,
   enqueueRescheduleMutation,
   getCachedWorkoutDay,
+  getCachedResource,
   hasPendingMutationsForDay,
   patchCachedSetsInDay,
 } from '@/lib/offline-queue';
@@ -64,6 +69,7 @@ interface SessionWithSets {
   id: string;
   title: string;
   startedAt: string;
+  recalculationVersion?: number | null;
   reschedule: {
     fromLocalDate: string;
     toLocalDate: string;
@@ -197,6 +203,8 @@ export default function WorkoutDayPage() {
   const [cancelReasonCode, setCancelReasonCode] = useState<number>(CANCEL_REASONS.FATIGUE);
   const [cancelling, setCancelling] = useState(false);
   const [syncError, setSyncError] = useState('');
+  const [recalculation, setRecalculation] = useState<RecalculationView | null>(null);
+  const [decidingRecalculation, setDecidingRecalculation] = useState(false);
   const [addExerciseError, setAddExerciseError] = useState('');
   const [addingExercise, setAddingExercise] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
@@ -307,6 +315,32 @@ export default function WorkoutDayPage() {
     return () => {
       cancelled = true;
     };
+  }, [date]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const cacheKey = `recalc-${date}`;
+
+    const loadRecalculation = async () => {
+      const cached = await getCachedResource<RecalculationView>(cacheKey);
+      if (!cancelled && cached?.level !== 'Sin cambios') setRecalculation(cached);
+
+      try {
+        const data = await fetchJsonWithInFlightDedup<{ recalculation: RecalculationView | null }>(
+          `/api/workouts/by-date/${date}/recalc`,
+        );
+        if (cancelled) return;
+        const next = data.recalculation?.level === 'Sin cambios' ? null : data.recalculation;
+        setRecalculation(next);
+        if (data.recalculation) await cacheResource(cacheKey, data.recalculation);
+        else await clearCachedResource(cacheKey);
+      } catch {
+        // La sugerencia cacheada permite decidir sin conexión.
+      }
+    };
+
+    void loadRecalculation();
+    return () => { cancelled = true; };
   }, [date]);
 
   useEffect(() => {
@@ -432,6 +466,60 @@ export default function WorkoutDayPage() {
         .filter((value): value is string => Boolean(value) && value !== date)
     )
   );
+
+  const applyRecalculationLocally = (accepted: boolean) => {
+    if (!recalculation) return;
+
+    const originalIds = new Set(recalculation.originalSets.flatMap((set) => set.id ? [set.id] : []));
+    const suggestedById = new Map(recalculation.suggestedSets.flatMap((set) => set.id ? [[set.id, set] as const] : []));
+    const nextSessions = sessions.map((session) => {
+      if (session.id !== recalculation.sessionId) return session;
+      const sets = accepted
+        ? session.sets
+            .filter((set) => !originalIds.has(set.id) || suggestedById.has(set.id))
+            .map((set) => {
+              const suggested = suggestedById.get(set.id);
+              return suggested
+                ? { ...set, targetWeight: suggested.targetWeight, repsTarget: suggested.repsTarget }
+                : set;
+            })
+        : session.sets;
+      return { ...session, recalculationVersion: accepted ? 1 : 0, sets };
+    });
+
+    setSessions(nextSessions);
+    setExercises(groupSetsByExercise(nextSessions));
+    void cacheWorkoutDay(date, nextSessions);
+  };
+
+  const handleRecalculationDecision = async (accepted: boolean) => {
+    if (!recalculation) return;
+    setDecidingRecalculation(true);
+
+    try {
+      const response = await fetch(`/api/workouts/by-date/${date}/recalc/accept`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accepted }),
+      });
+      if (!response.ok) throw new Error('No se pudo guardar la decisión');
+      applyRecalculationLocally(accepted);
+    } catch (decisionError) {
+      if (!navigator.onLine || decisionError instanceof TypeError) {
+        await enqueueRecalculationDecision(date, accepted);
+        applyRecalculationLocally(accepted);
+        setSyncError('Decisión guardada. Se sincronizará al reconectar.');
+      } else {
+        setError(decisionError instanceof Error ? decisionError.message : 'No se pudo guardar la decisión');
+        return;
+      }
+    } finally {
+      setDecidingRecalculation(false);
+    }
+
+    await clearCachedResource(`recalc-${date}`);
+    setRecalculation(null);
+  };
 
   const handleDeleteWorkout = async () => {
     if (sessionIds.length === 0) {
@@ -1098,6 +1186,13 @@ export default function WorkoutDayPage() {
           </div>
         )}
 
+        {recalculation && (
+          <RecalcBanner
+            recalculation={recalculation}
+            deciding={decidingRecalculation}
+            onDecision={handleRecalculationDecision}
+          />
+        )}
 
         {/* Lista de ejercicios tipo tarjetas */}
         <div className="flex flex-col gap-6 pb-24">
@@ -1259,7 +1354,7 @@ const groupLift = exerciseGroup.sets
             setAddExerciseError('');
             setShowAddExerciseModal(true);
           }}
-          disabled={addingExercise}
+          disabled={addingExercise || Boolean(recalculation)}
           className="add-exercise-fab"
           aria-label="Agregar ejercicio a este día"
           title="Agregar ejercicio a este día"

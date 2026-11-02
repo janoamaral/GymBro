@@ -4,7 +4,7 @@
 La vista `/workout/[date]` SHALL presentar, cuando exista una propuesta recalculada con nivel distinto de `Sin cambios`, un banner colapsable encima de la lista de ejercicios que muestra el nivel de ajuste y un resumen (`level + resumen`), y al expandirse muestra las diferencias por set entre el plan original y la propuesta.
 
 #### Scenario: Banner visible sólo con nivel > Sin cambios
-- **WHEN** existe una propuesta recalculada con nivel `Leve`, `Moderado`, `Agresivo`, `Por debajo` o `Conservador`
+- **WHEN** existe una propuesta recalculada con nivel `Leve`, `Moderado` o `Agresivo`
 - **THEN** la vista `/workout/[date]` renderiza un banner colapsable con el nivel y el resumen, encima de la lista de ejercicios
 
 #### Scenario: Sin banner cuando no hay propuesta

@@ -29,90 +29,92 @@ enum LiftId {
 }
 
 model User {
-  id                    String           @id @default(cuid())
-  auth0Id               String           @unique
-  email                 String           @unique
-  name                  String?
-  displayName           String?
-  avatarUrl             String?
-  role                  UserRole         @default(USER)
-  defaultUnit           WeightUnit       @default(kg)
-  defaultBarbellKg      Decimal          @default(20)
-  defaultBarbellLb      Decimal          @default(45)
-  cycleIncrement531     Float            @default(5.0)
-  restTimerSeconds      Int              @default(90)
-  setupTimeSeconds      Int              @default(15)
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
-  workoutSessions       WorkoutSession[]
-  exercises             Exercise[]
-  activityLogs          UserActivityLog[]
-  training531Profiles   Training531Profile[]
+  id                  String               @id @default(cuid())
+  auth0Id             String               @unique
+  email               String               @unique
+  name                String?
+  displayName         String?
+  avatarUrl           String?
+  role                UserRole             @default(USER)
+  defaultUnit         WeightUnit           @default(kg)
+  defaultBarbellKg    Decimal              @default(20)
+  defaultBarbellLb    Decimal              @default(45)
+  cycleIncrement531   Float                @default(5.0)
+  restTimerSeconds    Int                  @default(90)
+  setupTimeSeconds    Int                  @default(15)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  workoutSessions     WorkoutSession[]
+  exercises           Exercise[]
+  activityLogs        UserActivityLog[]
+  training531Profiles Training531Profile[]
 }
 
 model Exercise {
-  id              String        @id @default(cuid())
-  userId          String?
-  name            String
-  notes           String?
-  isSystem        Boolean       @default(false)
-  preferredUnit   WeightUnit?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  sets            ExerciseSet[]
+  id            String        @id @default(cuid())
+  userId        String?
+  name          String
+  notes         String?
+  isSystem      Boolean       @default(false)
+  preferredUnit WeightUnit?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sets          ExerciseSet[]
 }
 
 model WorkoutSession {
-  id              String          @id @default(cuid())
-  userId          String
-  title           String
-startedAt            DateTime        @default(now())
+  id                   String        @id @default(cuid())
+  userId               String
+  title                String
+  startedAt            DateTime      @default(now())
   finishedAt           DateTime?
   feelingScore         Int?
   feelingNotes         String?
-  recalculationVersion Int?            // null = sin propuesta, 0 = original elegida, 1 = recalc elegida
+  recalculationVersion Int? // null = sin propuesta, 0 = original elegida, 1 = recalc elegida
   recalcReason         String?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
-  user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  originalPlan         Json?
+  recalculatedPlan     Json?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   sets                 ExerciseSet[]
 }
 
 model ExerciseSet {
-  id                 String         @id @default(cuid())
-  sessionId          String
-  exerciseId         String
-  exerciseOrder      Int            @default(0)
-  liftId             LiftId?
-  setNumber          Int
-  repsTarget         Int
-  repsDone           Int?
-  weightDone         Decimal?
-  percentage         Decimal?
-  isAmrap            Boolean        @default(false)
-  targetWeight       Decimal
-  barbellWeight      Decimal?
-  perSideWeight      Decimal?
-  durationSeconds    Int?           // ponytail: hold time when reps don't apply (Dead Hang)
-  distanceMeters     Decimal?       @db.Decimal(8, 2) // ponytail: carry distance when reps don't apply (Farmer's Carry)
-  e1rm               Decimal?
-  amrapStatus        String?
-  amrapLoggedAt      DateTime?
-  unit               WeightUnit
-  isDone             Boolean        @default(false)
-  setFeelingScore    Int?
-  rpe                Int?           // Escala 1-10
-  rir                Int?           // Reps in Reserve, 0-5
-  restSeconds        Int?           // ponytail: actual rest before this set, from rest timer
-  isCancelled        Boolean        @default(false)
-  cancelReasonCode   Int?           // 1 = Cansancio, 2 = Falta de tiempo, 3 = Otro
-  isOriginalPlan     Boolean        @default(false)  // true = snapshot conservado del plan original
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
-  session            WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  exercise           Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
-  rpeLogs            RpeLog[]
+  id               String         @id @default(cuid())
+  sessionId        String
+  exerciseId       String
+  exerciseOrder    Int            @default(0)
+  liftId           LiftId?
+  setNumber        Int
+  repsTarget       Int
+  repsDone         Int?
+  weightDone       Decimal?
+  percentage       Decimal?
+  isAmrap          Boolean        @default(false)
+  targetWeight     Decimal
+  barbellWeight    Decimal?
+  perSideWeight    Decimal?
+  durationSeconds  Int? // ponytail: hold time when reps don't apply (Dead Hang)
+  distanceMeters   Decimal?       @db.Decimal(8, 2) // ponytail: carry distance when reps don't apply (Farmer's Carry)
+  e1rm             Decimal?
+  amrapStatus      String?
+  amrapLoggedAt    DateTime?
+  unit             WeightUnit
+  isDone           Boolean        @default(false)
+  setFeelingScore  Int?
+  rpe              Int? // Escala 1-10
+  rir              Int? // Reps in Reserve, 0-5
+  restSeconds      Int? // ponytail: actual rest before this set, from rest timer
+  isCancelled      Boolean        @default(false)
+  cancelReasonCode Int? // 1 = Cansancio, 2 = Falta de tiempo, 3 = Otro
+  isOriginalPlan   Boolean        @default(false) // true = snapshot conservado del plan original
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  session          WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exercise         Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  rpeLogs          RpeLog[]
 
   @@index([sessionId])
   @@index([sessionId, exerciseOrder])
@@ -121,38 +123,38 @@ model ExerciseSet {
 }
 
 model RpeLog {
-  id         String       @id @default(cuid())
-  setId      String
-  rpe        Int          // 1-10
-  rir        Int?         // 0-5
-  notes      String?
-  createdAt  DateTime     @default(now())
-  set        ExerciseSet  @relation(fields: [setId], references: [id], onDelete: Cascade)
+  id        String      @id @default(cuid())
+  setId     String
+  rpe       Int // 1-10
+  rir       Int? // 0-5
+  notes     String?
+  createdAt DateTime    @default(now())
+  set       ExerciseSet @relation(fields: [setId], references: [id], onDelete: Cascade)
 
   @@index([setId, createdAt])
 }
 
 model UserActivityLog {
-  id           String    @id @default(cuid())
-  userId       String
-  action       String
-  metadata     Json?
-  createdAt    DateTime  @default(now())
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
 }
 
 model Training531Profile {
-  id          String    @id @default(cuid())
+  id          String     @id @default(cuid())
   userId      String
   liftId      LiftId
   oneRm       Decimal
-  cycleNumber Int       @default(1)
+  cycleNumber Int        @default(1)
   unit        WeightUnit
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, liftId])
   @@index([userId])
