@@ -292,11 +292,10 @@ export type RecalcLevel =
   | "Sin cambios"
   | "Leve"
   | "Moderado"
-  | "Agresivo"
-  | "Por debajo"
-  | "Conservador";
+  | "Agresivo";
 
 export type RecalcInputSet = {
+  id?: string;
   setNumber: number;
   weight: number;
   reps: number;
@@ -306,9 +305,11 @@ export type RecalcInputSet = {
 };
 
 export type RecalcHistorySet = {
+  sessionId: string;
   repsTarget: number;
   repsDone: number | null;
   rir: number | null;
+  e1rm?: number | null;
   percentage: number;
   block: "MAIN" | "ASSISTANCE";
   isCancelled: boolean;
@@ -405,10 +406,7 @@ function computeSignal(
   ).length;
   const blockFatigue = totalSets > 0 ? cancelledFatigue / totalSets : 0;
 
-  // sessionsCount = sesiones distintas conceptualmente; aproximamos con
-  // (sets de MAIN / 3) ya que 5/3/1 son 3 sets por sesión principal.
-  const mainSets = history.filter((s) => s.block === "MAIN").length;
-  const sessionsCount = Math.max(1, Math.round(mainSets / 3));
+  const sessionsCount = new Set(history.map((set) => set.sessionId)).size;
 
   return { repPerformance, rirTrend, feelingTrend, blockFatigue, sessionsCount };
 }
@@ -464,18 +462,18 @@ export function recalculate531Session(input: {
   const feelingOk = feelingTrend == null || feelingTrend >= T.feelingOkMin;
   const fatigaBaja = blockFatigue < T.blockFatigueBajo;
 
-  // Caso "Por debajo": repPerformance bajo, sin importar fatiga
+  // Rendimiento bajo: ajuste moderado hacia abajo.
   if (repPerformance < T.repPerformanceBajo) {
     const reasonsBelow = [
       sig("repPerformance", repPerformance),
       "por debajo del objetivo",
     ];
     const suggested = applyAdjustment(originalSets, {
-      weightPorcentaje: T.bajoPesoPorcentaje,
-      drop_backoff_sets: 1,
+      allWeightPercentage: T.bajoPesoPorcentaje,
+      dropBackoffSets: 1,
     });
     reasons.push(...reasonsBelow, "reducir carga y 1 set de backoff");
-    return { level: "Por debajo", suggestedSets: suggested, reasons, signal, originalSets };
+    return { level: "Moderado", suggestedSets: suggested, reasons, signal, originalSets };
   }
 
   // Fatiga alta: prioridad a reducir volumen
@@ -485,11 +483,12 @@ export function recalculate531Session(input: {
       sig("feelingTrend", feelingTrend),
       "fatiga alta del bloque",
     ];
-    const suggested = applyAdjustment(originalSets, {
-      drop_backoff_sets: 1,
-    });
+    const hasBackoff = originalSets.some((set) => set.block === "ASSISTANCE");
+    const suggested = applyAdjustment(originalSets, hasBackoff
+      ? { dropBackoffSets: 1 }
+      : { allWeightPercentage: T.bajoPesoPorcentaje });
     reasons.push(...reasonsFatiga, "priorizar reducción de volumen, sin progresión");
-    return { level: "Conservador", suggestedSets: suggested, reasons, signal, originalSets };
+    return { level: "Agresivo", suggestedSets: suggested, reasons, signal, originalSets };
   }
 
   // Mejorando: clasificar por intensidad
@@ -510,7 +509,7 @@ export function recalculate531Session(input: {
 
   if (sobrecumpliendoAgresivo) {
     const suggested = applyAdjustment(originalSets, {
-      weightPorcentaje: T.moderadoPesoPorcentaje,
+      topSetWeightPercentage: T.moderadoPesoPorcentaje,
       amrapRepsExtra: T.agresivoRepsExtraAmrap,
     });
     reasons.push(
@@ -524,7 +523,7 @@ export function recalculate531Session(input: {
 
   if (mejorandoClaro) {
     const suggested = applyAdjustment(originalSets, {
-      weightPorcentaje: T.moderadoPesoPorcentaje,
+      allWeightPercentage: T.moderadoPesoPorcentaje,
     });
     reasons.push(
       sig("repPerformance", repPerformance),
@@ -536,7 +535,7 @@ export function recalculate531Session(input: {
 
   if (mejorandoLeve) {
     const suggested = applyAdjustment(originalSets, {
-      weightPorcentaje: T.levePesoPorcentaje,
+      topSetWeightPercentage: T.levePesoPorcentaje,
     });
     reasons.push(
       sig("repPerformance", repPerformance),
@@ -577,18 +576,25 @@ export function recalculate531Session(input: {
 function applyAdjustment(
   originalSets: RecalcInputSet[],
   opts: {
-    weightPorcentaje?: number;
+    allWeightPercentage?: number;
+    topSetWeightPercentage?: number;
     amrapRepsExtra?: number;
-    drop_backoff_sets?: number;
+    dropBackoffSets?: number;
   },
 ): RecalcSuggestedSet[] {
-  const { weightPorcentaje = 0, amrapRepsExtra = 0, drop_backoff_sets = 0 } = opts;
+  const {
+    allWeightPercentage = 0,
+    topSetWeightPercentage = 0,
+    amrapRepsExtra = 0,
+    dropBackoffSets = 0,
+  } = opts;
 
   const mainSets = originalSets.filter((s) => s.block === "MAIN");
   const assistanceSets = originalSets.filter((s) => s.block === "ASSISTANCE");
 
   const adjustedMain = mainSets.map((s) => {
-    const newWeight = clampWeight(s.weight * (1 + weightPorcentaje));
+    const weightPercentage = s.isAmrap ? topSetWeightPercentage || allWeightPercentage : allWeightPercentage;
+    const newWeight = clampWeight(s.weight * (1 + weightPercentage));
     const newReps = s.isAmrap ? s.reps + amrapRepsExtra : s.reps;
     return {
       ...s,
@@ -601,12 +607,12 @@ function applyAdjustment(
 
   // Backoff/accesorios: si hay que tirar sets, quitamos del final (últimos BBB/FSL).
   const trimmedAssistance =
-    drop_backoff_sets > 0
-      ? assistanceSets.slice(0, Math.max(0, assistanceSets.length - drop_backoff_sets))
+    dropBackoffSets > 0
+      ? assistanceSets.slice(0, Math.max(0, assistanceSets.length - dropBackoffSets))
       : assistanceSets;
 
   const adjustedAssistance = trimmedAssistance.map((s) => {
-    const newWeight = clampWeight(s.weight * (1 + weightPorcentaje));
+    const newWeight = clampWeight(s.weight * (1 + allWeightPercentage));
     return {
       ...s,
       weight: newWeight,

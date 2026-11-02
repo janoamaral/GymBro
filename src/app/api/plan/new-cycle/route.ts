@@ -22,6 +22,7 @@ function safePerSideWeight(targetWeight: number, unit: "kg" | "lb", barbellWeigh
 
 const newCycleSchema = z.object({
   startDate: z.string().refine((date) => !Number.isNaN(new Date(date).getTime()), "Invalid date format"),
+  repeat: z.boolean().default(false),
 });
 
 type TemplateSet = {
@@ -68,6 +69,77 @@ export async function POST(request: Request) {
 
     const startDate = new Date(payload.startDate);
     startDate.setUTCHours(0, 0, 0, 0);
+
+    if (payload.repeat) {
+      const latestSession = await db.workoutSession.findFirst({
+        where: { userId: user.id, sets: { some: {} } },
+        orderBy: { startedAt: "desc" },
+        select: { startedAt: true },
+      });
+
+      if (!latestSession) {
+        return NextResponse.json(
+          { error: "NO_CYCLE_TO_REPEAT", detail: "No hay un ciclo anterior para repetir" },
+          { status: 400 },
+        );
+      }
+
+      const sourceEnd = endOfUtcDay(latestSession.startedAt);
+      const sourceStart = addUtcDays(startOfUtcDay(sourceEnd), -27);
+      const sourceSessions = await db.workoutSession.findMany({
+        where: {
+          userId: user.id,
+          startedAt: { gte: sourceStart, lte: sourceEnd },
+          sets: { some: {} },
+        },
+        include: {
+          sets: { orderBy: [{ exerciseOrder: "asc" }, { setNumber: "asc" }] },
+        },
+        orderBy: [{ startedAt: "asc" }, { createdAt: "asc" }],
+      });
+
+      const firstSourceDate = startOfUtcDay(sourceSessions[0].startedAt);
+      const repeatedSessions = [];
+      const repeatedSets = [];
+
+      for (const sourceSession of sourceSessions) {
+        const dayOffset = Math.round(
+          (startOfUtcDay(sourceSession.startedAt).getTime() - firstSourceDate.getTime()) / 86_400_000,
+        );
+        const session = await db.workoutSession.create({
+          data: {
+            userId: user.id,
+            title: sourceSession.title,
+            startedAt: addUtcDays(startDate, dayOffset),
+            sets: {
+              create: sourceSession.sets.map((set) => ({
+                exerciseId: set.exerciseId,
+                exerciseOrder: set.exerciseOrder,
+                liftId: set.liftId,
+                setNumber: set.setNumber,
+                repsTarget: set.repsTarget,
+                percentage: set.percentage,
+                isAmrap: set.isAmrap,
+                targetWeight: set.targetWeight,
+                barbellWeight: set.barbellWeight,
+                perSideWeight: set.perSideWeight,
+                durationSeconds: set.durationSeconds,
+                distanceMeters: set.distanceMeters,
+                unit: set.unit,
+              })),
+            },
+          },
+          include: { sets: true },
+        });
+        repeatedSessions.push(session);
+        repeatedSets.push(...session.sets);
+      }
+
+      return NextResponse.json(
+        { sessions: repeatedSessions, createdSets: repeatedSets, repeated: true },
+        { status: 201 },
+      );
+    }
 
     // Get all 531 profiles for this user
     const profiles = await db.training531Profile.findMany({

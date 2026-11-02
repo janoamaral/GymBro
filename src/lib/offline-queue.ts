@@ -13,7 +13,8 @@ type QueueMutationType =
   | "delete_workout"
   | "add_exercise_to_day"
   | "delete_exercise_from_day"
-  | "cancel_exercise";
+  | "cancel_exercise"
+  | "recalc_decision";
 
 type SetInputPayload = {
   repsTarget?: number;
@@ -38,6 +39,10 @@ type CancelExercisePayload = {
   cancelReasonCode: number;
 };
 
+type RecalculationDecisionPayload = {
+  accepted: boolean;
+};
+
 type SetUpdatePayload = {
   setFeelingScore?: number | null;
   rpe?: number | null;
@@ -60,6 +65,7 @@ type QueueMutationPayload =
   | AddExercisePayload
   | DeleteExercisePayload
   | CancelExercisePayload
+  | RecalculationDecisionPayload
   | Record<string, never>;
 
 export type QueueMutation = {
@@ -461,6 +467,35 @@ export async function enqueueCancelExerciseMutation(
   dispatchSyncEvent("idle", await getOfflineQueuePendingCount());
 }
 
+export async function enqueueRecalculationDecision(
+  date: string,
+  accepted: boolean,
+): Promise<void> {
+  if (!canUseIndexedDb()) return;
+
+  const queue = await getAllQueueMutations();
+  const existing = queue.find(
+    (item) => item.type === "recalc_decision" && item.targetId === date,
+  );
+  const now = Date.now();
+  const next: QueueMutation = existing
+    ? { ...existing, payload: { accepted }, updatedAt: now }
+    : {
+        id: nextMutationId(),
+        type: "recalc_decision",
+        targetId: date,
+        endpoint: `/api/workouts/by-date/${date}/recalc/accept`,
+        method: "POST",
+        payload: { accepted },
+        createdAt: now,
+        updatedAt: now,
+        attempts: 0,
+      };
+
+  await putQueueMutation(next);
+  dispatchSyncEvent("idle", await getOfflineQueuePendingCount());
+}
+
 export async function acknowledgeSetMutationFields(
   setId: string,
   keys: Array<keyof SetUpdatePayload>,
@@ -671,6 +706,13 @@ export async function getCachedResource<T>(key: string): Promise<T | null> {
   });
 }
 
+export async function clearCachedResource(key: string): Promise<void> {
+  if (!canUseIndexedDb()) return;
+  await withStore<void>(RESOURCE_CACHE_STORE, "readwrite", (store) => {
+    store.delete(key);
+  });
+}
+
 export async function listOfflineQueueMutations(): Promise<QueueMutation[]> {
   return getAllQueueMutations();
 }
@@ -753,7 +795,7 @@ export async function hasPendingMutationsForDay(
     if (mutation.type === 'set_update') {
       return setIdSet.has(mutation.targetId);
     }
-    if (mutation.type === 'reorder_exercises' || mutation.type === 'add_exercise_to_day' || mutation.type === 'delete_exercise_from_day' || mutation.type === 'cancel_exercise') {
+    if (mutation.type === 'reorder_exercises' || mutation.type === 'add_exercise_to_day' || mutation.type === 'delete_exercise_from_day' || mutation.type === 'cancel_exercise' || mutation.type === 'recalc_decision') {
       return mutation.targetId.startsWith(`${date}:`) || mutation.targetId === date;
     }
     return sessionIdSet.has(mutation.targetId);

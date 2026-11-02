@@ -15,12 +15,14 @@ interface NewCycleModalProps {
   readonly isOpen: boolean;
   readonly onClose: () => void;
   readonly onStart: (startDate: string) => void;
+  readonly mode?: 'new' | 'repeat';
 }
 
 export function NewCycleModal({
   isOpen,
   onClose,
   onStart,
+  mode = 'new',
 }: NewCycleModalProps) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [startDate, setStartDate] = useState('');
@@ -66,7 +68,7 @@ export function NewCycleModal({
       const res = await fetch('/api/plan/new-cycle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ startDate: effectiveStartDate }),
+        body: JSON.stringify({ startDate: effectiveStartDate, repeat: mode === 'repeat' }),
       });
 
       if (!res.ok) {
@@ -84,9 +86,13 @@ export function NewCycleModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Iniciar Nuevo Ciclo">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={mode === 'repeat' ? 'Repetir Último Ciclo' : 'Iniciar Nuevo Ciclo'}
+    >
       <div className="space-y-4">
-        {profiles.length > 0 ? (
+        {mode === 'new' && (profiles.length > 0 ? (
           <div className="panel-soft rounded-xl p-3 space-y-2">
             <p className="text-sm font-medium text-gray-300">Current Cycle Info:</p>
             {profiles.map((profile) => (
@@ -97,6 +103,12 @@ export function NewCycleModal({
           </div>
         ) : (
           <p className="text-gray-400 text-sm">No 5/3/1 profiles found. Please create a profile first.</p>
+        ))}
+
+        {mode === 'repeat' && (
+          <p className="panel-soft rounded-xl p-3 text-sm text-gray-300">
+            Se copiará completo el ciclo más reciente sin cambiar pesos ni repeticiones.
+          </p>
         )}
 
         <div>
@@ -129,10 +141,10 @@ export function NewCycleModal({
           </button>
           <button
             onClick={handleStart}
-            disabled={loading || profiles.length === 0}
+            disabled={loading || (mode === 'new' && profiles.length === 0)}
             className="btn-accent px-4 py-2 font-medium disabled:opacity-50"
           >
-            {loading ? 'Iniciando...' : 'Iniciar Nuevo Ciclo'}
+            {loading ? 'Generando...' : mode === 'repeat' ? 'Repetir Ciclo' : 'Iniciar Nuevo Ciclo'}
           </button>
         </div>
       </div>

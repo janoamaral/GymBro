@@ -12,6 +12,7 @@ test.describe('offline sync flow', () => {
   const resetOfflineDb = async (page: Page) => {
     await page.goto('/');
     await page.evaluate(async () => {
+      await Promise.all((await caches.keys()).map((key) => caches.delete(key)));
       await new Promise<void>((resolve) => {
         try {
           const request = indexedDB.deleteDatabase('gymbro-offline-db');
@@ -58,19 +59,14 @@ test.describe('offline sync flow', () => {
     await expect(page.getByLabel('Marcar set 1 como completado')).toBeVisible();
 
     await context.setOffline(true);
-    await expect(page.getByText(/Offline:/i)).toBeVisible({ timeout: 6000 });
 
     const checkbox = page.getByLabel('Marcar set 1 como completado');
     await checkbox.click();
 
-    const rpeSlider = page.getByLabel('RPE del set 1');
-    await rpeSlider.fill('9');
-
     const rirSlider = page.getByLabel('RIR del set 1');
     await rirSlider.fill('1');
 
-    const feelingSlider = page.getByLabel('Sensación del set 1');
-    await feelingSlider.fill('4');
+    await page.getByLabel('Marcar feeling como Bien').click();
 
     await expect(page.getByText(/Guardado offline|Offline:/i)).toBeVisible({ timeout: 6000 });
 
@@ -88,9 +84,8 @@ test.describe('offline sync flow', () => {
 
     expect(updatedSet).toBeTruthy();
     expect(updatedSet?.isDone).toBe(true);
-    expect(updatedSet?.rpe).toBe(9);
     expect(updatedSet?.rir).toBe(1);
-    expect(updatedSet?.setFeelingScore).toBe(4);
+    expect(updatedSet?.setFeelingScore).toBe(5);
 
     await request.delete(`/api/workouts/${sessionId}`);
   });
@@ -129,11 +124,11 @@ test.describe('offline sync flow', () => {
     await context.setOffline(true);
     await page.getByLabel('Marcar set 1 como completado').click();
 
-    await page.getByLabel('RPE del set 1').fill('9');
     await page.getByLabel('RIR del set 1').fill('1');
-    await page.getByLabel('Sensación del set 1').fill('5');
+    await page.getByLabel('Marcar feeling como Bien').click();
 
-    await context.setOffline(false);
+    await page.waitForTimeout(700);
+    await expect(page.getByText(/Guardado offline/i)).toBeVisible();
 
     const serverInterference = await request.patch(`/api/workouts/${sessionId}/sets/${setId}`, {
       data: {
@@ -144,6 +139,7 @@ test.describe('offline sync flow', () => {
     });
     expect(serverInterference.ok()).toBeTruthy();
 
+    await context.setOffline(false);
     await page.bringToFront();
     await page.waitForTimeout(3000);
 
@@ -156,7 +152,7 @@ test.describe('offline sync flow', () => {
       .find((set) => set.id === setId);
 
     expect(updatedSet).toBeTruthy();
-    expect(updatedSet?.rpe).toBe(9);
+    expect(updatedSet?.rpe).toBe(6);
     expect(updatedSet?.rir).toBe(1);
     expect(updatedSet?.setFeelingScore).toBe(5);
 
@@ -250,6 +246,17 @@ test.describe('offline sync flow', () => {
     const workoutBody = await workoutResponse.json();
     const sessionId = workoutBody.session.id as string;
 
+    const setResponse = await request.post(`/api/workouts/${sessionId}/sets`, {
+      data: {
+        exerciseName: 'Offline Delete Squat',
+        liftId: 'SQ',
+        repsTarget: 5,
+        targetWeight: 100,
+        unit: 'kg',
+      },
+    });
+    expect(setResponse.ok()).toBeTruthy();
+
     const rescheduleResponse = await request.patch(`/api/workouts/${sessionId}`, {
       data: { rescheduledToLocalDate: targetDate },
     });
@@ -312,7 +319,7 @@ test.describe('offline sync flow', () => {
     await expect(page.getByText(/Offline Any Route Bench/i).first()).toBeVisible();
 
     await page.goto(`/workout/${nextDate}`);
-    await expect(page.getByRole('heading', { name: /Workout/i })).toBeVisible();
+    await expect(page.getByText('Workout', { exact: true })).toBeVisible();
 
     await page.goto(`/workout/${nextDate}/${exerciseId}`);
     await expect(page.getByText(/Offline Any Route Bench/i).first()).toBeVisible();

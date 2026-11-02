@@ -32,6 +32,7 @@ export default function MainDashboard({
   const [workoutDays, setWorkoutDays] = useState<CalendarDateItem[]>([]);
   const [showPlanChooser, setShowPlanChooser] = useState(false);
   const [showNewCycleModal, setShowNewCycleModal] = useState(false);
+  const [cycleMode, setCycleMode] = useState<'new' | 'repeat'>('new');
   const [loading, setLoading] = useState(true);
 
   const year = currentDate.getFullYear();
@@ -226,12 +227,24 @@ export default function MainDashboard({
           <button
             onClick={() => {
               setShowPlanChooser(false);
+              setCycleMode('new');
               setShowNewCycleModal(true);
             }}
             className="btn-dark w-full px-4 py-4 text-left rounded-xl"
           >
             <p className="font-semibold text-white">Iniciar Nuevo Ciclo</p>
             <p className="text-sm text-gray-400">Clona la última semana y genera un ciclo 5/3/1 de 4 semanas</p>
+          </button>
+          <button
+            onClick={() => {
+              setShowPlanChooser(false);
+              setCycleMode('repeat');
+              setShowNewCycleModal(true);
+            }}
+            className="btn-dark w-full px-4 py-4 text-left rounded-xl"
+          >
+            <p className="font-semibold text-white">Repetir Último Ciclo</p>
+            <p className="text-sm text-gray-400">Mismos ejercicios, series, repeticiones y pesos</p>
           </button>
         </div>
       </Modal>
@@ -240,6 +253,7 @@ export default function MainDashboard({
         isOpen={showNewCycleModal}
         onClose={() => setShowNewCycleModal(false)}
         onStart={handleNewCycleStart}
+        mode={cycleMode}
       />
     </main>
   );
