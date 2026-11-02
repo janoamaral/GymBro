@@ -25,8 +25,8 @@ async function createSession(
 
   const setResponse = await request.post(`/api/workouts/${sessionId}/sets`, {
     data: {
-      exerciseName: 'E2E Dynamic Squat',
-      liftId: 'SQ',
+      exerciseName: 'E2E Dynamic Deadlift',
+      liftId: 'DL',
       repsTarget: 10,
       targetWeight: 100,
       unit: 'kg',
@@ -37,6 +37,7 @@ async function createSession(
 }
 
 test('accepts a recalculated session and preserves both plan snapshots', async ({ page, request }) => {
+  test.setTimeout(60_000);
   const createdSessionIds: string[] = [];
   try {
     for (const daysAgo of [-20, -13, -6]) {

@@ -51,7 +51,7 @@ export async function getSessionRecalculation(
         orderBy: [{ exerciseOrder: "asc" }, { setNumber: "asc" }],
       },
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
   });
 
   if (!session || session.recalculationVersion !== null) return null;

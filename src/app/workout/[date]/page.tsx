@@ -887,7 +887,7 @@ export default function WorkoutDayPage() {
   );
 
   const handleExerciseOpen = (
-    event: MouseEvent<HTMLButtonElement>,
+    event: MouseEvent<HTMLElement>,
     exerciseGroup: ExerciseGroup
   ) => {
     if (skipNextExerciseOpenRef.current) {
@@ -1221,8 +1221,10 @@ const groupLift = exerciseGroup.sets
               selectedCardClass = 'scale-[0.98] -translate-y-1 opacity-80';
             }
             return (
-              <button
+              <article
                 key={exerciseGroup.exerciseId}
+                role="button"
+                tabIndex={0}
                 data-exercise-card-id={exerciseGroup.exerciseId}
                 onDragOver={(event) => {
                   event.preventDefault();
@@ -1235,6 +1237,12 @@ const groupLift = exerciseGroup.sets
                   handleDropExercise(exerciseGroup.exerciseId);
                 }}
                 onClick={(event) => handleExerciseOpen(event, exerciseGroup)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    event.currentTarget.click();
+                  }
+                }}
                 className={`${baseCardClass} ${selectedCardClass} cursor-pointer pr-12 pb-12 pl-12 ${isDragTargetCard ? 'ring-2 ring-sky-300/70 drag-card--target' : ''} ${isDraggingThisCard ? 'opacity-85 drag-card--active transition-none' : ''}`}
                 style={
                   isDraggingThisCard
@@ -1333,7 +1341,7 @@ const groupLift = exerciseGroup.sets
                     <Ban size={18} className="pointer-events-none" />
                   </button>
                 )}
-              </button>
+              </article>
             );
           })}
         </div>
